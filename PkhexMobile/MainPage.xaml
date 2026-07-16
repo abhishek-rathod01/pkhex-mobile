@@ -26,10 +26,22 @@
 
             <Button
                 x:Name="CounterBtn"
-                Text="Click me" 
+                Text="Click me"
                 SemanticProperties.Hint="Counts the number of times you click"
                 Clicked="OnCounterClicked"
                 HorizontalOptions="Fill" />
+
+            <Button
+                x:Name="PickFileBtn"
+                Text="Pick a file"
+                SemanticProperties.Hint="Opens the file picker and reads the selected file"
+                Clicked="OnPickFileClicked"
+                HorizontalOptions="Fill" />
+
+            <Label
+                x:Name="FileResultLabel"
+                Text=""
+                LineBreakMode="WordWrap" />
         </VerticalStackLayout>
     </ScrollView>
 
