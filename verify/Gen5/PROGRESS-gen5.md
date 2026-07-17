@@ -1,6 +1,25 @@
 # Gen 5 (Black/White/Black 2/White 2) Save Support — Verification Progress
 
-## Test data used
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); real Pokémon Black
+(`Pokemon Black Version.sav`, 524288 bytes, Trainer Noah, 6-member party) and White 2
+(`Pokemon White 2 Version.sav`, Trainer Antonio, 6-member party) saves became available
+and were confirmed both via console-level `SaveUtil.GetSaveFile` read (both sub-versions)
+and through the actual app UI (file picker → party list → detail screen, Black save) on
+the PkhexMobile_Emulator AVD.
+
+- Party list (Black) showed all 6 members correctly (Snake/Serperior Lv.100, Cab
+  Driver/Seismitoad, Astronaut/Golurk, Surfer/Simipour, Wild Wings/Trumbeak, Alvin/Boldore).
+- Detail screen for Snake showed: Species Serperior, Nature Bashful, Ability Overgrow,
+  Moves Leaf Blade/Coil/Leech Seed/Slam, IVs 4/30/15/23/22/17, EVs
+  100/100/100/11/99/100 — all matching the console-level read exactly.
+
+This closes the "should be re-verified against real game saves" note below — Gen5 is
+now confirmed against genuine save files (both BW and B2W2 sub-versions), not just a
+library-generated one.
+
+## Test data used (original)
 No real Gen 5 `.sav` file exists anywhere in this worktree (searched for `*.sav` / `*.dsv` across
 the whole repo — none found). Verification therefore used a **library-generated blank save**,
 constructed entirely through PKHeX.Core's own public API (`new SAV5BW()`). No synthetic/hand-written

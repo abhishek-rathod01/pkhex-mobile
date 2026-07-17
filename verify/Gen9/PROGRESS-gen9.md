@@ -1,6 +1,30 @@
 # Gen 9 (Scarlet/Violet) Save-Parsing Verification
 
-## Summary
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); a real Pokémon Scarlet save
+(`pkmnscarlet_100/main`, 4436579 bytes, Trainer Player, 6-member competitively-built
+party — a Switch save dump, not a flat `.sav`) became available and was confirmed both
+via console-level `SaveUtil.GetSaveFile` read and through the actual app UI (file
+picker → party list → detail screen) on the PkhexMobile_Emulator AVD.
+
+- Party list showed all 6 members correctly (Skeledirge, Clodsire, Squawkabilly,
+  Garganacl, Tinkaton, Dondozo — all Lv.100).
+- Detail screen for Skeledirge showed: Species Skeledirge, Nature Timid, Ability Blaze,
+  Moves Torch Song/Shadow Ball/Snarl/Hex, IVs all 31, EVs 72/129/45/100/61/103 — all
+  matching the console-level read exactly.
+
+A real Legends Z-A save (`pkmnlegendsza_100_21/main`, Trainer Player, 6-member party,
+mixed CJK/Latin nicknames) was also confirmed at the console level (`SAV9ZA`
+recognized correctly) but not separately driven through the UI.
+
+This closes the "no real Gen9 save file was available" gap below, and is a
+particularly important result given the documented Write()/re-detection limitation for
+*library-generated* Gen9 saves (see below): a **real, loaded** Gen9 save reads (and,
+per Phase 3, edits/exports) correctly through the full app — that limitation only ever
+affected freshly-authored blank saves, never real ones.
+
+## Summary (original)
 
 **Status: PASS (primary verification).** Library-generated save data was used —
 no real Gen9 `.sav` file was available (confirmed via search, see below), and no

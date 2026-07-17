@@ -1,5 +1,26 @@
 # Gen 3 (Ruby/Sapphire/Emerald/FireRed/LeafGreen) Save-Parsing Verification
 
+## Real-file check (2026-07-17): still library-generated only
+
+Real save files became available at `C:\Users\abhis\Downloads\sav files pkmn` and were
+swept through `SaveUtil.GetSaveFile()`. Two Gen3-adjacent files were present:
+
+- `01-GPXP-pokemon_rs_memory_box.gci` (483392 bytes, GameCube memory card export) — this
+  **was recognized**, as `SAV3RSBox` (Ruby/Sapphire GameCube box-storage format).
+  However this is a **PC-box-only storage container**, not an in-game trainer save —
+  it has no active party (`PartyCount: 0`, default Trainer "PKHeX"). It confirms
+  PKHeX.Core can parse this GCI/box format, but does not exercise trainer name / party
+  / species-level reads, so it does not close the gap this file describes.
+- No other file in the provided set matched a mainline Gen3 trainer save (RS/Emerald/
+  FRLG in-game `.sav`, 128KB) or a Colosseum/XD memory card save.
+
+**Conclusion: Gen3's party-level verification (trainer name, party count, species,
+level, nature, ability, moves, IVs/EVs) still rests on the library-generated save
+described below, not a real trainer save.** This is the one generation still without
+real-file confirmation once every other generation (1, 2, 4, 5, 6, 7, 7b, 8, 9) was
+confirmed. A real Ruby/Sapphire/Emerald/FireRed/LeafGreen in-game save (or a Colosseum/
+XD save with actual party data) would close this gap.
+
 ## Record correction
 
 Prior session history had suggested Gen 3 support was "already working." That is

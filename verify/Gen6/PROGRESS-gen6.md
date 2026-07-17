@@ -1,6 +1,24 @@
 # Generation 6 (X/Y/Omega Ruby/Alpha Sapphire) Save-Parsing Verification
 
-## Summary
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); real Pokémon Alpha Sapphire
+saves (`27.Current`, 483328 bytes, Trainer Theseus, 6-member party; also
+`oldASsave/main`, Trainer Isabella, 1-member party) and an Omega Ruby save (`main(6)`,
+Trainer Jack, 6-member party) became available and were confirmed both via
+console-level `SaveUtil.GetSaveFile` read (all three) and through the actual app UI
+(file picker → party list → detail screen, `27.Current`) on the PkhexMobile_Emulator AVD.
+
+- Party list showed all 6 members correctly (Parasect Lv.95, Ampharos Lv.91, Latias
+  Lv.49, Chansey Lv.100, Lugia Lv.51, Rayquaza Lv.71).
+- Detail screen for Parasect showed: Species Parasect, Nature Hardy, Ability Dry Skin,
+  Moves Spore/False Swipe/Swords Dance/Rest, IVs 6/24/24/29/15/21, EVs
+  158/37/9/39/15/252 — all matching the console-level read exactly.
+
+This closes the "not a real save file" note below — Gen6 is now confirmed against
+genuine save files (both AS and OR sub-versions), not just a library-generated one.
+
+## Summary (original)
 
 Verified that PKHeX.Core's `SAV6XY` save object can be constructed, populated, and read
 back correctly using the library's own APIs. **This used a library-generated blank save,

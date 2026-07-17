@@ -1,6 +1,25 @@
 # Gen 1 (Red/Blue/Yellow) Save-Parsing Verification
 
-## Status: VERIFIED (library-generated save)
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); a real Pokémon Red save
+(`POKEMON RED-0.sav`, 32768 bytes, Trainer ASH, 6-member party) became available and
+was confirmed both via console-level `SaveUtil.GetSaveFile` read and through the actual
+app UI (file picker → party list → detail screen) on the PkhexMobile_Emulator AVD.
+
+- Party list showed all 6 members correctly: MEW Lv.100, MEWTWO Lv.100, VENUSAUR Lv.100,
+  BLASTOISE Lv.100, DRAGONITE Lv.100, CHARIZARD Lv.100.
+- Detail screen for MEW showed: Species Mew, Nature Hardy, Ability — (correct for Gen1,
+  which has no abilities), Moves Rock Slide/Ice Beam/Psychic/Tri Attack, IVs
+  13/15/11/15/15/12, EVs 65535/65535/65535/65535/65535/65535 (Gen1 "EVs" are actually
+  raw 0-65535 stat experience, which is what the abstract `EV_*` properties expose for
+  this generation) — all matching the console-level read exactly.
+
+This closes the "should be re-verified against a real game save" note below — Gen1 is
+now confirmed against a genuine cartridge/emulator save, not just a library-generated
+one.
+
+## Status (original): VERIFIED (library-generated save)
 
 ## Test method
 

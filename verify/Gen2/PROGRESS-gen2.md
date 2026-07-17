@@ -1,6 +1,22 @@
 # Generation 2 (Gold/Silver/Crystal) Save-Parsing Verification
 
-## Summary
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); a real Pokémon Crystal save
+(`Pokemon - Crystal Version (UE) (V1.1) C!.SAV`, 32768 bytes, Trainer Kent, 1-member
+party) became available and was confirmed both via console-level `SaveUtil.GetSaveFile`
+read and through the actual app UI (file picker → party list → detail screen) on the
+PkhexMobile_Emulator AVD.
+
+- Party list showed the single member correctly: PIDGEOT Lv.46.
+- Detail screen showed: Species Pidgeot, Nature Hardy, Ability — (correct for Gen2,
+  which has no abilities), Moves Wing Attack/Gust/Quick Attack/Fly, IVs 14/1/7/4/4/15,
+  EVs 5543/6396/5664/5643/5643/5615 — all matching the console-level read exactly.
+
+This closes the "should be re-verified against a real game save" note below — Gen2 is
+now confirmed against a genuine save file, not just a library-generated one.
+
+## Summary (original)
 
 **Status: VERIFIED (library-generated save, primary check PASS)**
 

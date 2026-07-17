@@ -1,6 +1,39 @@
 # Gen 7 Save Support Verification (Sun/Moon, Ultra Sun/Ultra Moon)
 
-## Scope
+## Status: VERIFIED against REAL save files (2026-07-17), including LGPE
+
+Originally verified library-generated only (see below); real save files became
+available and closed multiple gaps at once:
+
+- **SAV7SM**: `oldMoonSave/main` (Trainer Isabella, 1-member party, low level/mostly
+  default stats) and **SAV7USUM**: `oldUMsave/main` (Trainer Isabella, 6-member party)
+  and a second USUM save (top-level `main`, Trainer Ultrasun, 6-member party) — all
+  recognized correctly via console-level `SaveUtil.GetSaveFile`.
+- **SAV7b (Let's Go Pikachu/Eevee)**: `PLGP Master Trainer Counters/Final/savedata.bin`
+  (1048576 bytes, Trainer Josh, 6-member party) — this was explicitly out of scope for
+  the original pass (see "Scope" below) but a real file became available, so it was
+  tested too, and **is now confirmed working**, closing that gap as well.
+
+On-device UI verification (file picker → party list → detail screen) was done against
+the `oldUMsave/main` USUM save on the PkhexMobile_Emulator AVD:
+
+- Party list showed all 6 members correctly (Eli/Raichu Lv.100, Umi/Vikavolt Lv.97,
+  Nico/Averagle Lv.97, Kotori/Bewear Lv.94, Maki/Sandygast Lv.96, Nozomi/Zebstrika Lv.94
+  — actual species per console sweep).
+- Detail screen for Eli showed: Species Raichu, Nature Hardy, **Ability Surge Surfer**
+  (an Alolan-form-specific ability, confirming regional form data reads correctly),
+  Moves Thunderbolt/Psychic/Focus Blast/Grass Knot, IVs 9/4/16/10/19/19, EVs
+  41/119/67/57/52/174 — all matching the console-level read exactly.
+
+Separately, the LGPE save was also driven through the on-device UI: party list showed
+Marowak Lv.75 (and 5 others), and the detail screen for Marowak showed Species Marowak,
+Nature Adamant, Ability Cursed Body, Moves Will-O-Wisp/Bonemerang/Thrash/Flare Blitz
+(an Alolan Marowak fire-type moveset), IVs 31/31/31/0/0/31, EVs all 0 — correct.
+
+This closes the "not a real save file" gaps below — Gen7 (SM, USUM) and Gen7b (LGPE)
+are all now confirmed against genuine save files, not just library-generated ones.
+
+## Scope (original)
 
 Generation 7 covers: Sun/Moon (`SAV7SM`), Ultra Sun/Ultra Moon (`SAV7USUM`), and
 Let's Go Pikachu/Eevee (`SAV7b`). Per task instructions, only **SM and USUM**

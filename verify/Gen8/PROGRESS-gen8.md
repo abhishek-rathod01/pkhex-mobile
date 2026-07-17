@@ -1,6 +1,28 @@
 # Gen 8 (Sword/Shield) Save-Parsing Verification
 
-## Scope
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); a real Pokémon Sword save
+(`pokemonsword_100/main`, 1603176 bytes, Trainer Player, 5-member party — a Switch save
+dump, not a flat `.sav`) became available and was confirmed both via console-level
+`SaveUtil.GetSaveFile` read and through the actual app UI (file picker → party list →
+detail screen) on the PkhexMobile_Emulator AVD.
+
+- Party list showed all 5 members correctly, with **Chinese-language nicknames
+  rendering correctly** in both the bold nickname line and the editable Nickname entry
+  field: 超梦/Mewtwo Lv.100, 无极汰那/Eternatus Lv.100, 苍响/Zacian Lv.100,
+  藏玛然特/Zamazenta Lv.100, 萨戮德/Zarude Lv.100.
+- Detail screen for 超梦 showed: Species Mewtwo, Nature Hardy, Ability Pressure, Moves
+  Aura Sphere/Psystrike/Psycho Cut/Psychic, IVs all 31, EVs 14/52/8/0/0/0 — all matching
+  the console-level read exactly. This is also the first real-world (non-ASCII) test of
+  the CJK species-name/nickname resource lookup path, and it worked without any code
+  changes needed.
+
+This closes the "library-generated only" gap below — Gen8 (SWSH) is now confirmed
+against a genuine save file, not just a library-generated one. BDSP and Legends Arceus
+sub-versions are still untested (see below).
+
+## Scope (original)
 
 Verifies that PKHeX.Core (vendored at `vendor/PKHeX.Core/`) can construct, populate, and
 read back a Generation 8 save file (`SAV8SWSH`, used by Pokémon Sword/Shield) as a plain

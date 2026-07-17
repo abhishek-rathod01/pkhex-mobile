@@ -1,6 +1,29 @@
 # Gen 4 (Diamond/Pearl/Platinum/HeartGold/SoulSilver) Save-Parsing Verification
 
-## Status: VERIFIED (library-generated save, not a real game save)
+## Status: VERIFIED against a REAL save file (2026-07-17)
+
+Originally verified library-generated only (see below); a real Pokémon HeartGold save
+(`Pokemon Heart Gold Version.sav`, 524288 bytes, Trainer Kyle, 6-member party) became
+available and was confirmed both via console-level `SaveUtil.GetSaveFile` read and
+through the actual app UI (file picker → party list → detail screen) on the
+PkhexMobile_Emulator AVD.
+
+- Party list showed all 6 members correctly (HDChipCard/Meganium, FlashDrive/Ampharos,
+  USBCharger/Umbreon, Micro Chip/Noctowl, MemoryCard/Politoed, Micro Card/Raticate — all
+  Lv.100).
+- Detail screen for HDChipCard showed: Species Meganium, Nature Timid, **Ability
+  Overgrow** (first real non-"—" Ability confirmed in this project, since Gen4 does have
+  abilities unlike Gen1/2), Moves Solar Beam/Synthesis/Petal Dance/Aromatherapy, IVs
+  26/6/31/3/18/11, EVs 100/10/100/100/100/100 — all matching the console-level read
+  exactly.
+
+This closes the "should be re-verified against real game saves" note below — Gen4 is
+now confirmed against a genuine save file, not just a library-generated one. This also
+resolves the earlier concern about the Gen4 `Write()` crash: that crash only affects
+a *blank library-constructed* save being re-exported; a real, loaded save reads
+(and, per Phase 3, edits/exports) without issue.
+
+## Status (original): VERIFIED (library-generated save, not a real game save)
 
 No real Gen4 `.sav` file exists anywhere in this worktree (searched for `*.sav` under
 `C:\Users\abhis\Desktop\pkhex-mobile-gen4` — none found). Verification below was performed
