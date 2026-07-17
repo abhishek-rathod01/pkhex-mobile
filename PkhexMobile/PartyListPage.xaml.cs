@@ -37,4 +37,17 @@ public partial class PartyListPage : ContentPage
 
         PartyList.ItemsSource = entries;
     }
+
+    private async void OnPartySelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not PartyEntryDisplay entry)
+            return;
+
+        PartyList.SelectedItem = null;
+
+        await Shell.Current.GoToAsync(nameof(PokemonDetailPage), new Dictionary<string, object>
+        {
+            ["Pokemon"] = entry.Source,
+        });
+    }
 }

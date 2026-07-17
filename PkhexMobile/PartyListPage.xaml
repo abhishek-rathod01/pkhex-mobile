@@ -14,7 +14,8 @@
 
         <CollectionView x:Name="PartyList"
                          Grid.Row="1"
-                         SelectionMode="None">
+                         SelectionMode="Single"
+                         SelectionChanged="OnPartySelectionChanged">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="local:PartyEntryDisplay">
                     <Grid Padding="10" ColumnDefinitions="Auto,*,Auto">
