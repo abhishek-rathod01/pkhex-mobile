@@ -6,6 +6,7 @@ public partial class MainPage : ContentPage
 {
 	int count = 0;
 	byte[]? lastPickedBytes;
+	SaveFile? loadedSave;
 
 	public MainPage()
 	{
@@ -44,26 +45,45 @@ public partial class MainPage : ContentPage
 			text += "\n\n" + TryParseSaveFile(lastPickedBytes);
 
 			FileResultLabel.Text = text;
+			ViewPartyBtn.IsVisible = loadedSave is { PartyCount: > 0 };
 		}
 		catch (Exception ex)
 		{
 			FileResultLabel.Text = $"Error: {ex.Message}";
+			loadedSave = null;
+			ViewPartyBtn.IsVisible = false;
 		}
 	}
 
-	private static string TryParseSaveFile(byte[] data)
+	private string TryParseSaveFile(byte[] data)
 	{
 		try
 		{
 			var sav = SaveUtil.GetSaveFile(data);
 			if (sav is null)
+			{
+				loadedSave = null;
 				return "Not a recognized save file.";
+			}
 
+			loadedSave = sav;
 			return $"Save file detected!\nTrainer: {sav.OT}\nParty count: {sav.PartyCount}";
 		}
 		catch (Exception ex)
 		{
+			loadedSave = null;
 			return $"Save parse error: {ex.Message}";
 		}
+	}
+
+	private async void OnViewPartyClicked(object? sender, EventArgs e)
+	{
+		if (loadedSave is null)
+			return;
+
+		await Shell.Current.GoToAsync(nameof(PartyListPage), new Dictionary<string, object>
+		{
+			["Save"] = loadedSave,
+		});
 	}
 }

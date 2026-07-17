@@ -42,6 +42,13 @@
                 x:Name="FileResultLabel"
                 Text=""
                 LineBreakMode="WordWrap" />
+
+            <Button
+                x:Name="ViewPartyBtn"
+                Text="View Party"
+                IsVisible="False"
+                Clicked="OnViewPartyClicked"
+                HorizontalOptions="Fill" />
         </VerticalStackLayout>
     </ScrollView>
 
