@@ -1,25 +1,31 @@
 # Gen 3 (Ruby/Sapphire/Emerald/FireRed/LeafGreen) Save-Parsing Verification
 
-## Real-file check (2026-07-17): still library-generated only
+## Status: VERIFIED against a REAL save file (2026-07-17, updated)
 
-Real save files became available at `C:\Users\abhis\Downloads\sav files pkmn` and were
-swept through `SaveUtil.GetSaveFile()`. Two Gen3-adjacent files were present:
+A real Pokémon Emerald trainer save (`pokeemerald (2).sav`, 131072 bytes, Trainer
+Abhishk, 5-member party) was provided, closing the gap noted below. Confirmed both via
+console-level `SaveUtil.GetSaveFile` read (`SAV3E`, Version E) and through the actual
+app UI (file picker → party list → detail screen) on the PkhexMobile_Emulator AVD.
 
-- `01-GPXP-pokemon_rs_memory_box.gci` (483392 bytes, GameCube memory card export) — this
-  **was recognized**, as `SAV3RSBox` (Ruby/Sapphire GameCube box-storage format).
-  However this is a **PC-box-only storage container**, not an in-game trainer save —
-  it has no active party (`PartyCount: 0`, default Trainer "PKHeX"). It confirms
-  PKHeX.Core can parse this GCI/box format, but does not exercise trainer name / party
-  / species-level reads, so it does not close the gap this file describes.
-- No other file in the provided set matched a mainline Gen3 trainer save (RS/Emerald/
-  FRLG in-game `.sav`, 128KB) or a Colosseum/XD memory card save.
+- Party list showed all 5 members correctly: MEWTWO Lv.100, DEOXYS Lv.100, SALAMENCE
+  Lv.100, MEW Lv.30, TELLYTEBBY/Abra Lv.9 (a custom nickname distinct from species,
+  confirming the nickname-vs-species-name display logic works for Gen3 too).
+- Detail screen for MEW showed: Species Mew, Nature Mild, Ability Synchronize, Moves
+  Fly/Surf/Waterfall/Dive, IVs 17/12/23/26/15/3, EVs all 0 — all matching the
+  console-level read exactly.
 
-**Conclusion: Gen3's party-level verification (trainer name, party count, species,
-level, nature, ability, moves, IVs/EVs) still rests on the library-generated save
-described below, not a real trainer save.** This is the one generation still without
-real-file confirmation once every other generation (1, 2, 4, 5, 6, 7, 7b, 8, 9) was
-confirmed. A real Ruby/Sapphire/Emerald/FireRed/LeafGreen in-game save (or a Colosseum/
-XD save with actual party data) would close this gap.
+This closes the last remaining "no real save file" gap in the project — all 9
+generations (1 through 9, including 7b/LGPE) are now confirmed against genuine save
+files, not just library-generated ones.
+
+### Earlier finding (superseded): GCI box file only
+
+Before the Emerald save was provided, the only Gen3-adjacent real file available was
+`01-GPXP-pokemon_rs_memory_box.gci` (483392 bytes, GameCube memory card export) —
+recognized as `SAV3RSBox` (Ruby/Sapphire GameCube box-storage format), but a
+**PC-box-only storage container** with no active party (`PartyCount: 0`). It confirmed
+the GCI format parses but didn't exercise trainer/party/species/level reads. That gap
+is now closed by the real Emerald save above.
 
 ## Record correction
 
