@@ -14,4 +14,9 @@ public static class NavigationState
 {
     public static SaveFile? PendingSave { get; set; }
     public static PKM? PendingPokemon { get; set; }
+
+    // Carried alongside PendingPokemon so the detail page can write edits back into
+    // the correct party slot via SaveFile.SetPartySlotAtIndex.
+    public static SaveFile? PendingPokemonSave { get; set; }
+    public static int PendingPokemonIndex { get; set; }
 }

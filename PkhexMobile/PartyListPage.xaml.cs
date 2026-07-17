@@ -4,6 +4,8 @@ namespace PkhexMobile;
 
 public partial class PartyListPage : ContentPage
 {
+    SaveFile? currentSave;
+
     public PartyListPage()
     {
         InitializeComponent();
@@ -13,10 +15,17 @@ public partial class PartyListPage : ContentPage
     {
         base.OnAppearing();
 
-        var sav = NavigationState.PendingSave;
-        NavigationState.PendingSave = null;
-        if (sav is not null)
-            LoadParty(sav);
+        // Only adopt a newly-handed-off save on first arrival; on every appearance
+        // (including returning from PokemonDetailPage after an edit) re-read from
+        // currentSave so edited nickname/level show up without a fresh navigation.
+        if (NavigationState.PendingSave is { } sav)
+        {
+            currentSave = sav;
+            NavigationState.PendingSave = null;
+        }
+
+        if (currentSave is not null)
+            LoadParty(currentSave);
     }
 
     private void LoadParty(SaveFile sav)
@@ -46,6 +55,8 @@ public partial class PartyListPage : ContentPage
         PartyList.SelectedItem = null;
 
         NavigationState.PendingPokemon = entry.Source;
+        NavigationState.PendingPokemonSave = currentSave;
+        NavigationState.PendingPokemonIndex = entry.Slot - 1;
         await Shell.Current.GoToAsync(nameof(PokemonDetailPage));
     }
 }

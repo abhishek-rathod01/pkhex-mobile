@@ -9,6 +9,22 @@
         <VerticalStackLayout Padding="20" Spacing="10">
             <Label x:Name="TitleLabel" FontSize="22" FontAttributes="Bold" />
 
+            <Label Text="Nickname" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry x:Name="NicknameEntry" />
+
+            <Label Text="Level" FontAttributes="Bold" />
+            <Entry x:Name="LevelEntry" Keyboard="Numeric" />
+
+            <Button x:Name="SaveChangesBtn"
+                    Text="Save Changes"
+                    Clicked="OnSaveChangesClicked"
+                    HorizontalOptions="Fill"
+                    Margin="0,10,0,0" />
+
+            <Label x:Name="SaveStatusLabel" TextColor="Gray" LineBreakMode="WordWrap" />
+
+            <BoxView HeightRequest="1" BackgroundColor="LightGray" Margin="0,10" />
+
             <CollectionView x:Name="StatsList">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="local:StatRow">
