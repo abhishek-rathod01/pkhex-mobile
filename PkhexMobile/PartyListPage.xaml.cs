@@ -2,21 +2,21 @@ using PKHeX.Core;
 
 namespace PkhexMobile;
 
-[QueryProperty(nameof(Save), "Save")]
 public partial class PartyListPage : ContentPage
 {
-    public SaveFile? Save
-    {
-        set
-        {
-            if (value is not null)
-                LoadParty(value);
-        }
-    }
-
     public PartyListPage()
     {
         InitializeComponent();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+
+        var sav = NavigationState.PendingSave;
+        NavigationState.PendingSave = null;
+        if (sav is not null)
+            LoadParty(sav);
     }
 
     private void LoadParty(SaveFile sav)
@@ -45,9 +45,7 @@ public partial class PartyListPage : ContentPage
 
         PartyList.SelectedItem = null;
 
-        await Shell.Current.GoToAsync(nameof(PokemonDetailPage), new Dictionary<string, object>
-        {
-            ["Pokemon"] = entry.Source,
-        });
+        NavigationState.PendingPokemon = entry.Source;
+        await Shell.Current.GoToAsync(nameof(PokemonDetailPage));
     }
 }

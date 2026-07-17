@@ -2,21 +2,21 @@ using PKHeX.Core;
 
 namespace PkhexMobile;
 
-[QueryProperty(nameof(Pokemon), "Pokemon")]
 public partial class PokemonDetailPage : ContentPage
 {
-    public PKM? Pokemon
-    {
-        set
-        {
-            if (value is not null)
-                LoadPokemon(value);
-        }
-    }
-
     public PokemonDetailPage()
     {
         InitializeComponent();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+
+        var pk = NavigationState.PendingPokemon;
+        NavigationState.PendingPokemon = null;
+        if (pk is not null)
+            LoadPokemon(pk);
     }
 
     private void LoadPokemon(PKM pk)

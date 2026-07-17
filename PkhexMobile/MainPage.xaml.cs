@@ -81,9 +81,7 @@ public partial class MainPage : ContentPage
 		if (loadedSave is null)
 			return;
 
-		await Shell.Current.GoToAsync(nameof(PartyListPage), new Dictionary<string, object>
-		{
-			["Save"] = loadedSave,
-		});
+		NavigationState.PendingSave = loadedSave;
+		await Shell.Current.GoToAsync(nameof(PartyListPage));
 	}
 }
