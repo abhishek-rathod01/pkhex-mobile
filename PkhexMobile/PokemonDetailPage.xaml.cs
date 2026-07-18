@@ -19,6 +19,11 @@ public partial class PokemonDetailPage : ContentPage
         IvDefEntry.TextChanged += OnIvIndependentEntryTextChanged;
         IvSpaEntry.TextChanged += OnIvIndependentEntryTextChanged;
         IvSpeEntry.TextChanged += OnIvIndependentEntryTextChanged;
+        // HP/SpD are only independently editable on Gen3+ (disabled for Gen1/2, see
+        // LoadPokemon) - still wire the same live clamp so typing past ivMax is caught
+        // there too, not just at save time.
+        IvHpEntry.TextChanged += OnIvIndependentEntryTextChanged;
+        IvSpdEntry.TextChanged += OnIvIndependentEntryTextChanged;
         EvSpaEntry.TextChanged += OnEvSpaEntryTextChanged;
     }
 

@@ -324,12 +324,39 @@ the app had before this pass.
   the synthetic-input half of the harness checks against. Both halves pass
   for all six probed values on both real save files.
 
-Deliberately not addressed in this pass (out of scope for Item 1, which
-covers IV caps only): Gen1/2 "EVs" are actually 16-bit Stat Exp
-(hardware range 0-65535), not the modern 0-252 EV system - the EV entry
-fields still validate against 252 for every generation, same as before.
-This is a separate, pre-existing inaccuracy for Gen1/2 EVs, not something
-introduced or fixed here.
+### Follow-up gaps closed after advisor review
+
+1. **Gen3+ HP/SpD IV fields weren't live-clamped.** The initial pass only
+   wired the live `ivMax` clamp to the four independently-stored IV fields
+   (Atk/Def/SpA/Spe), since HP/SpD are derived/linked-and-disabled for
+   Gen1/2. But for Gen3+, HP and SpD *are* independently editable, and typing
+   an out-of-range value into them was only caught at save time, not live -
+   missing Item 1's stated goal ("out-of-range values can never be entered
+   in the first place") for 2 of 6 fields. Fixed by wiring `IvHpEntry`/
+   `IvSpdEntry` to the same clamp handler as the other four (harmless no-op
+   for Gen1/2, where they're disabled anyway).
+2. **Genuine pre-existing bug found, not fixed (out of scope for Item 1):**
+   Gen1/2 "EVs" are actually 16-bit Stat Exp (hardware range 0-65535), not
+   the modern 0-252 EV system - confirmed against the real Gen1 save
+   (`POKEMON RED-0.sav`, MEW at level 100 has `EV_HP=EV_ATK=...=65535`,
+   maxed stat exp). The EV entry fields still parse into a `byte` and
+   validate against 252 for every generation, unchanged from before this
+   pass. Effect, not just cosmetic: `byte.TryParse("65535")` **fails
+   outright** (doesn't fit in a byte at all), so `OnSaveChangesClicked`
+   reports "EVs must be numbers between 0 and 252" and **blocks saving any
+   edit at all** - including a nickname-only change - on a Gen1/2 mon that
+   already has real stat exp. This is a pre-existing bug, not something
+   Item 1 introduced (the old hardcoded-252 validation had the exact same
+   `byte`-parse failure); it was only surfaced now because Item 2's
+   on-device verification is the first pass to actually drive
+   `OnSaveChangesClicked` against a real Gen1/2 save with real stat exp
+   values loaded into the UI. Fixing it properly (widening the EV field
+   type past `byte` and making the cap generation-aware, 0-65535 for
+   Gen1/2 vs 0-252 for Gen3+) is its own scope, not Item 1's "IV caps
+   only" - logged here so it isn't silently rediscovered. Item 2's
+   full save round-trip is therefore run against a Gen3+ save instead of
+   Gen1/2; the Gen1/2 pass in Item 2 is display/cap-only (no Save Changes
+   click).
 
 ## Known limitations / not covered in this pass
 
