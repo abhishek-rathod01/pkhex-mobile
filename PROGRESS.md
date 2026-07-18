@@ -228,6 +228,48 @@ per-generation branching the UI has intentionally avoided everywhere else.
 Flagged in `WAKEUP.md` as a design decision for the user rather than
 worked around silently.
 
+### Follow-up checks after initial round-trip pass
+
+Two gaps were identified in review of the initial IV/EV round-trip pass and
+closed:
+
+1. **Party stat block staleness.** `pk.CurrentLevel = level` writes EXP, not
+   the party save's separately-stored computed stat block
+   (`Stat_Level`/`Stat_HPMax`/`Stat_HPCurrent`/`Stat_ATK`/etc.) - it was
+   possible the exported save would show the new level in the UI while the
+   actual in-game stats stayed frozen at the old level, which would be a
+   real, usable-save-breaking defect the original test didn't check because
+   it only read back `CurrentLevel`/`IV_*`/`EV_*`. Extended
+   `verify/EditRoundTrip/Program.cs` to also dump `Stat_Level`/`Stat_HPMax`/
+   `Stat_HPCurrent`/`Stat_ATK` after reload. Confirmed correct on all three
+   gens - e.g. Gen9 Scarlet: level edited 100→88, `Stat_Level=88`,
+   `Stat_HPMax=367` (not the level-100 value). `SaveFile.SetPartySlotAtIndex`
+   → `SetSlotFormatParty` → `SetPartyValues(pk, isParty: true)` recalculates
+   the stat block as part of the existing write path - no extra call needed
+   from the app.
+2. **String encoding edge case.** All prior nickname tests used plain ASCII.
+   Added a fourth round-trip case against the real Legends Z-A save
+   (`pkmnlegendsza_100_21\main`), which has genuine CJK nicknames, editing a
+   party member's nickname to a mixed Japanese/Chinese string
+   (`テスト測試`, level 100→77). Round-tripped correctly.
+
+### Caveat: "reload through the file picker" was verified at the library level, not on-device
+
+Task C/D asked to "export an edited save, reload it through the file
+picker, confirm ... read back correctly." `verify/EditRoundTrip/Program.cs`
+calls the exact same PKHeX.Core APIs the app's `FileSaver`-export and
+`FilePicker`-reload paths call
+(`SetPartySlotAtIndex`/`Write()`/`SaveUtil.GetSaveFile(byte[])`), so this is
+a faithful proxy for the underlying data-correctness question - but the
+actual on-device `FileSaver.Default.SaveAsync` write and
+`FilePicker.Default.PickAsync` read were **not** exercised end-to-end in
+this session (no emulator UI driving was done for the edit flow). This
+project has one documented precedent (the Shell-navigation
+`InvalidCastException` in the "Bug found and fixed during verification"
+section above) of a bug that only surfaced on-device and never showed up in
+`dotnet build`. The edit/export/reload *data path* is verified; the
+on-device *file I/O plumbing* around it is not, in this pass.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any

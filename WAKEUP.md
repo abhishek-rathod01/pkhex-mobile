@@ -38,12 +38,25 @@ place from earlier sessions.
   replicates the app's exact edit→export→reload code path against real
   saves for Gen1 (`POKEMON RED-0.sav`), Gen5 (`Pokemon Black Version.sav`),
   and Gen9 (`pkmnscarlet_100\main`). All three pass; original files
-  confirmed byte-for-byte untouched on disk.
+  confirmed byte-for-byte untouched on disk. **Caveat**: this proxies the
+  file-picker reload with the same library call the picker uses
+  (`SaveUtil.GetSaveFile(byte[])`) - it's a faithful check of the
+  data-correctness question, but the actual on-device `FileSaver` write and
+  `FilePicker` read were not driven end-to-end in this session. This
+  project has one documented precedent (the Shell-navigation
+  `InvalidCastException`, see `PROGRESS.md`) of a bug that only ever
+  surfaced on-device, so don't read "round-trip PASS" here as "confirmed
+  working in the actual app UI."
 - **D - IV/EV editing**: added six editable IV fields and six editable EV
   fields to the detail screen, same generic PKHeX.Core-setter pattern as
-  nickname/level. Round-trip verified against the same three real saves -
-  all pass. One genuine, non-blocking finding logged in `PROGRESS.md`: see
-  "Needs your decision" below.
+  nickname/level. Round-trip verified against the same three real saves,
+  plus a fourth pass added after review: confirmed the party **stat block**
+  (`Stat_Level`/`Stat_HPMax`/etc., separate storage from EXP/level) actually
+  recalculates on export rather than staying stale at the old level -
+  it does, correctly, on all 3 gens - and confirmed a CJK nickname
+  (`テスト測試`, on the real Legends Z-A save) round-trips correctly too. One
+  genuine, non-blocking finding logged in `PROGRESS.md`: see "Needs your
+  decision" below.
 - **E - `.claudeignore`**: added at repo root, excludes
   `vendor/PKHeX.Core/` from routine scanning.
 - **G (bonus, evaluated)**: checked whether any additional real-save

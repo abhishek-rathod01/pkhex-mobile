@@ -13,6 +13,7 @@ var cases = new (string Label, string RelPath, int Slot, string NewNickname, int
     ("Gen1 (Red, real save)", "POKEMON RED-0.sav", 0, "TESTEDIT", 42),
     ("Gen5 (Black, real save)", "Pokemon Black Version.sav", 0, "TESTEDIT", 55),
     ("Gen9 (Scarlet, real save)", @"pkmnscarlet_100\main", 0, "TESTEDIT", 88),
+    ("Gen9 (Legends Z-A, real save, CJK nickname)", @"pkmnlegendsza_100_21\main", 0, "テスト測試", 77),
 };
 
 // IV/EV values chosen to be distinguishable from each other and from typical
@@ -128,6 +129,7 @@ foreach (var (label, relPath, slot, newNickname, newLevel) in cases)
 
     var pk2 = reloaded.PartyData[slot];
     Console.WriteLine($"  After reload: Nickname='{pk2.Nickname}' Level={pk2.CurrentLevel}");
+    Console.WriteLine($"  After reload party stat block: Stat_Level={pk2.Stat_Level} Stat_HPMax={pk2.Stat_HPMax} Stat_HPCurrent={pk2.Stat_HPCurrent} Stat_ATK={pk2.Stat_ATK}");
     Console.WriteLine($"  After reload IVs: HP={pk2.IV_HP} Atk={pk2.IV_ATK} Def={pk2.IV_DEF} SpA={pk2.IV_SPA} SpD={pk2.IV_SPD} Spe={pk2.IV_SPE}");
     Console.WriteLine($"  After reload EVs: HP={pk2.EV_HP} Atk={pk2.EV_ATK} Def={pk2.EV_DEF} SpA={pk2.EV_SPA} SpD={pk2.EV_SPD} Spe={pk2.EV_SPE}");
 
