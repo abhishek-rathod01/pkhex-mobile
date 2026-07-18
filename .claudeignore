@@ -1,0 +1,4 @@
+# Vendored PKHeX.Core library - excluded from routine scanning to keep
+# searches/context focused on this project's own code. Still readable on
+# explicit request (Read/Grep can target it directly by path).
+vendor/PKHeX.Core/
