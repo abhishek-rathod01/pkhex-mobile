@@ -161,6 +161,73 @@ immediately after `File.ReadAllBytes` before ever passing it to
 byte array back to `path`), but worth knowing before writing similar
 verification code.
 
+## IV/EV editing + round-trip verification (2026-07-18)
+
+Detail screen: IVs and EVs (all six stats each) are now editable, following
+the same pattern as nickname/level - `PokemonDetailPage.xaml.cs` applies
+`pk.IV_*`/`pk.EV_*` via PKHeX.Core's own setters, then the existing
+`SetPartySlotAtIndex` + `Write()` + `FileSaver` export flow (unchanged).
+Input is range-validated generically (IV 0-31, EV 0-252) exactly like the
+existing level validation - **not** per-generation, matching the project's
+"fully generic, no per-generation branching" design principle already
+established for the read-only UI.
+
+`verify/EditRoundTrip/Program.cs` was extended to also set all 6 IVs/EVs
+(distinct values per stat, chosen to make any stat mixup visible in the
+diff) alongside nickname/level, against the same three real saves as
+before:
+
+| Gen | Round-trip (export+reload preserves in-memory value) |
+|---|---|
+| 1 | ✅ PASS |
+| 5 | ✅ PASS |
+| 9 | ✅ PASS |
+
+All three gens preserve exactly what the `PKM` object held right before
+`Write()` - export/reload serialization itself is not lossy for IVs/EVs on
+any tested gen. No stop-and-log condition was hit.
+
+### Genuine finding: Gen1/2 silently normalize IV/EV input, not a round-trip bug
+
+The harness first asserted round-trip success against the *requested* input
+values (5, 11, 17, 23, 29, 31 for IVs; 4, 12, 20, 28, 36, 44 for EVs) and
+Gen1 "failed" - but the correct comparison is requested-input vs. what
+`PKM` actually stores after the setter runs (pre-export), not
+requested-input vs. post-reload. Redoing the test against that in-memory
+baseline, Gen1 passes cleanly. The real story, confirmed by reading
+`vendor/PKHeX.Core/PKM/Shared/GBPKM.cs:185-191`:
+
+- Gen1/2 IVs are 4-bit DVs (real hardware range 0-15, not the 5-bit 0-31
+  range Gen3+ uses). `IV_ATK`/`IV_DEF`/`IV_SPA`(`IV_SPC`)/`IV_SPE` setters
+  clamp any input above 15 down to 15 (`value > 0xF ? 0xF : value`) -
+  silently, no exception, no signal back to the caller.
+- `IV_HP` has **no independent storage** - its setter is a no-op
+  (`set { }`) - the getter derives it from the low bit of the other four
+  DVs (`((IV_ATK&1)<<3)|((IV_DEF&1)<<2)|((IV_SPE&1)<<1)|((IV_SPC&1)<<0)`).
+  This is a faithful reproduction of real Gen1/2 game mechanics, not a
+  library bug.
+- `IV_SPD`/`EV_SPD` setters are also no-ops - Gen1/2 has one shared
+  Special stat, so `IV_SPD`/`EV_SPD` always mirror whatever `IV_SPA`/
+  `EV_SPA` was last set to.
+- This exactly mirrors the already-documented Gen3 quirk in
+  `verify/Gen3/PROGRESS-gen3.md` (Nature/Ability/Gender setters are no-ops
+  because those are PID-derived, not stored fields) - a class of "the
+  setter exists to satisfy the abstract `PKM` contract but the generation
+  genuinely doesn't have that as independent state" behavior, not corruption.
+
+**Net effect on the current generic UI**: a user editing a Gen1/2 mon's IVs
+today can type e.g. `23` into the SpA field and see it silently become `15`
+after saving, with no in-app message explaining why, and editing "HP IV" or
+"SpD IV/EV" independently has no effect at all (they always mirror/derive
+from other fields). The export itself is correct and lossless for what
+PKHeX.Core actually stored - the gap is UI feedback, not data integrity.
+Deliberately **not fixed in this pass**: making the IV/EV editor
+generation-aware (capping DV fields at 15, disabling/hiding the derived
+HP field, merging SpA/SpD into one input for Gen1/2) would introduce the
+per-generation branching the UI has intentionally avoided everywhere else.
+Flagged in `WAKEUP.md` as a design decision for the user rather than
+worked around silently.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any

@@ -38,6 +38,21 @@ public partial class PokemonDetailPage : ContentPage
         TitleLabel.Text = PkmDisplayHelper.GetDisplayName(p);
         NicknameEntry.Text = p.Nickname;
         LevelEntry.Text = p.CurrentLevel.ToString();
+
+        IvHpEntry.Text = p.IV_HP.ToString();
+        IvAtkEntry.Text = p.IV_ATK.ToString();
+        IvDefEntry.Text = p.IV_DEF.ToString();
+        IvSpaEntry.Text = p.IV_SPA.ToString();
+        IvSpdEntry.Text = p.IV_SPD.ToString();
+        IvSpeEntry.Text = p.IV_SPE.ToString();
+
+        EvHpEntry.Text = p.EV_HP.ToString();
+        EvAtkEntry.Text = p.EV_ATK.ToString();
+        EvDefEntry.Text = p.EV_DEF.ToString();
+        EvSpaEntry.Text = p.EV_SPA.ToString();
+        EvSpdEntry.Text = p.EV_SPD.ToString();
+        EvSpeEntry.Text = p.EV_SPE.ToString();
+
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
 
@@ -50,11 +65,18 @@ public partial class PokemonDetailPage : ContentPage
             new("Move 2", PkmDisplayHelper.GetMoveName(p.Move2)),
             new("Move 3", PkmDisplayHelper.GetMoveName(p.Move3)),
             new("Move 4", PkmDisplayHelper.GetMoveName(p.Move4)),
-            new("IVs", $"HP {p.IV_HP} / Atk {p.IV_ATK} / Def {p.IV_DEF} / SpA {p.IV_SPA} / SpD {p.IV_SPD} / Spe {p.IV_SPE}"),
-            new("EVs", $"HP {p.EV_HP} / Atk {p.EV_ATK} / Def {p.EV_DEF} / SpA {p.EV_SPA} / SpD {p.EV_SPD} / Spe {p.EV_SPE}"),
         };
 
         StatsList.ItemsSource = rows;
+    }
+
+    private static bool TryParseStat(string? text, int max, out byte value)
+    {
+        value = 0;
+        if (!byte.TryParse(text, out var parsed) || parsed > max)
+            return false;
+        value = parsed;
+        return true;
     }
 
     private async void OnSaveChangesClicked(object? sender, EventArgs e)
@@ -71,11 +93,41 @@ public partial class PokemonDetailPage : ContentPage
             return;
         }
 
+        if (!TryParseStat(IvHpEntry.Text, 31, out var ivHp) || !TryParseStat(IvAtkEntry.Text, 31, out var ivAtk) ||
+            !TryParseStat(IvDefEntry.Text, 31, out var ivDef) || !TryParseStat(IvSpaEntry.Text, 31, out var ivSpa) ||
+            !TryParseStat(IvSpdEntry.Text, 31, out var ivSpd) || !TryParseStat(IvSpeEntry.Text, 31, out var ivSpe))
+        {
+            SaveStatusLabel.Text = "IVs must be numbers between 0 and 31.";
+            return;
+        }
+
+        if (!TryParseStat(EvHpEntry.Text, 252, out var evHp) || !TryParseStat(EvAtkEntry.Text, 252, out var evAtk) ||
+            !TryParseStat(EvDefEntry.Text, 252, out var evDef) || !TryParseStat(EvSpaEntry.Text, 252, out var evSpa) ||
+            !TryParseStat(EvSpdEntry.Text, 252, out var evSpd) || !TryParseStat(EvSpeEntry.Text, 252, out var evSpe))
+        {
+            SaveStatusLabel.Text = "EVs must be numbers between 0 and 252.";
+            return;
+        }
+
         try
         {
             pk.Nickname = NicknameEntry.Text ?? string.Empty;
             pk.IsNicknamed = true;
             pk.CurrentLevel = level;
+
+            pk.IV_HP = ivHp;
+            pk.IV_ATK = ivAtk;
+            pk.IV_DEF = ivDef;
+            pk.IV_SPA = ivSpa;
+            pk.IV_SPD = ivSpd;
+            pk.IV_SPE = ivSpe;
+
+            pk.EV_HP = evHp;
+            pk.EV_ATK = evAtk;
+            pk.EV_DEF = evDef;
+            pk.EV_SPA = evSpa;
+            pk.EV_SPD = evSpd;
+            pk.EV_SPE = evSpe;
 
             parentSave.SetPartySlotAtIndex(pk, partyIndex);
 
