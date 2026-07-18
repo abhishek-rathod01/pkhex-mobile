@@ -358,6 +358,66 @@ the app had before this pass.
    Gen1/2; the Gen1/2 pass in Item 2 is display/cap-only (no Save Changes
    click).
 
+## On-device edit flow verification (2026-07-18)
+
+Item 2 asked for the full edit flow (load real save → view party → edit
+nickname/level/IV/EV → save → reload → confirm) to be driven at least once
+through the actual on-device `FileSaver`/`FilePicker` UI, not the
+library-level proxy `verify/EditRoundTrip/Program.cs` used - closing the
+caveat that document had carried since it was written. Done on the
+`PkhexMobile_Emulator` AVD (API 36); screenshots in
+`verify/OnDeviceEdit/screenshots/`.
+
+**Environment note for future sessions:** installing the Debug APK directly
+via `adb install` (bypassing the .NET Android build's own deploy step)
+crashes on launch with `SIGABRT` / *"No assemblies found in
+'.../files/.__override__/x86_64' ... Assuming this is part of Fast
+Deployment. Exiting..."* - Debug builds default to Fast Deployment, which
+expects the tooling to push assemblies to that override directory
+separately from the APK; a bare `adb install` never does that. Fix: deploy
+with `dotnet build PkhexMobile/PkhexMobile.csproj -f net10.0-android
+-t:Run`, which both builds and correctly installs/launches. Cost about 40
+minutes of this session chasing silent launch failures (`am start` printing
+no error yet the process never appearing in `adb shell ps`) before finding
+the crash in `adb logcat -b crash`. Also note plain `dotnet build` (no
+`-t:Run`) does *not* reliably refresh the already-installed `-Signed.apk`
+on disk even when source changed and it reports "Build succeeded" - always
+check the APK's file timestamp against the source files' before trusting
+`adb install -r` of a pre-existing APK path, or just use `-t:Run`/`-t:Rebuild`.
+
+**Full round-trip (Gen5, `gen5_real.sav` = `Pokemon Black Version.sav`,
+pushed to `/sdcard/Download/`):** loaded via the real file picker → View
+Party → tapped "Snake" (Serperior) → edited Nickname `Snake→TESTEDIT2`,
+Level `100→55`, IV SpA `23→31`, EV HP `100→50` through the on-screen
+keyboard → Save Changes → the real `FileSaver` document-picker dialog
+appeared → **caught and corrected an autocomplete hazard**: the save
+dialog's filename field pre-filled/autocompleted to `gen5_real.sav`
+(the original file's name) partway through the flow; saving with that name
+would have overwritten the real save. Cleared it and typed a distinct name
+(`gen5_edited_item2.sav`) before confirming - the app itself never
+attempted to touch the original path, this was a picker-UI autocomplete
+risk caught before it became a mistake. Exported to
+`/storage/emulated/0/Download/gen5_edited_item2.sav` ("Saved to: ..."
+shown in-app). Reloaded that file through the real file picker from Home
+→ View Party → tapped the party entry (now showing nickname **TESTEDIT2**
+in the list itself, confirming the export) → detail screen showed
+Nickname `TESTEDIT2`, Level `55`, IV SpA `31`, EV HP `50` - all edits
+round-tripped correctly through the real on-device file I/O, not just the
+library-level proxy.
+
+**Gen1/2 cap enforcement (`gen1_real.sav` = `POKEMON RED-0.sav`, MEW):**
+confirmed visually and structurally, without clicking Save (see the
+Gen1/2 EV bug logged above - saving this mon would hit the byte-parse
+block). The IV label read *"IVs / DVs (0-15 each; HP derived, SpD linked
+to SpA)"*; `adb shell uiautomator dump` confirmed the HP and SpD **IV**
+entries and the SpD **EV** entry all have `enabled="false"` in the live
+view hierarchy (not just visually greyed - genuinely non-interactive).
+Typing `99` into the Atk IV field live-clamped to `15` as each keystroke
+landed, with no separate submit step needed - confirming Item 1(a)/(d)'s
+"can't be entered in the first place" claim holds in the running app, not
+only in code review. The EV row showing `65535` for every stat visually
+corroborates the Gen1/2 EV finding logged above.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any
