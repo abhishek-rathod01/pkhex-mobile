@@ -86,6 +86,50 @@ between "field is genuinely unset" and "field has a real value" - it
 just displays whatever PKHeX.Core returns, which is the intended
 generic, read-only behavior.
 
+## Real-save inventory sweep (2026-07-18)
+
+A console harness (`verify/Inventory/Program.cs`, references `PKHeX.Core`
+directly, no Android/emulator dependency) walked every file under
+`C:\Users\abhis\Downloads\sav files pkmn` (256 files, recursive) and ran
+`SaveUtil.GetSaveFile(path)` on each one. This re-confirms, from a clean
+sweep, the same file set that the per-gen `PROGRESS-genN.md` docs already
+recorded as "VERIFIED against a REAL save file" on 2026-07-17 (commits
+`6dacc46`, `66f3bb8`) - that on-device app UI verification (file picker →
+party list → detail screen) is not repeated here, only the detection layer.
+
+| Detected format | Gen | Files |
+|---|---|---|
+| `SAV1` | 1 | `POKEMON RED-0.sav` |
+| `SAV2` | 2 | `Pokemon - Crystal Version (UE) (V1.1) C!.SAV` |
+| `SAV3E` | 3 | `pokeemerald (2).sav` |
+| `SAV3RSBox` | 3 | `01-GPXP-pokemon_rs_memory_box.gci` (GC box-storage only, PartyCount=0) |
+| `SAV4HGSS` | 4 | `Pokemon Heart Gold Version.sav` |
+| `SAV5BW` | 5 | `Pokemon Black Version.sav` |
+| `SAV5B2W2` | 5 | `Pokemon Nero 2 Fix.sav`, `Pokemon White 2 Version.sav` |
+| `SAV6AO` | 6 | `27.Current`, `main(6)`, `oldgen6&7saves\...Alpha Sapphire\oldASsave\main` |
+| `SAV7SM` | 7 | `oldgen6&7saves\...Moon\oldMoonSave\main` |
+| `SAV7USUM` | 7 | `main`, `oldgen6&7saves\...Ultra Moon\oldUMsave\main`, plus 68 single-party-slot dumps under `US - Encounters Master\` (one file per captured encounter) |
+| `SAV7b` | 7b (LGPE) | `PLGP Master Trainer Counters\Final\savedata.bin` |
+| `SAV8SWSH` | 8 | `pokemonsword_100\main` |
+| `SAV9SV` | 9 | `pkmnscarlet_100\main` |
+| `SAV9ZA` | 9 (Legends Z-A) | `pkmnlegendsza_100_21\main` |
+
+Not recognized (checked individually, both expected):
+- `pcdata-legendes Arceus.bin` (345,600 bytes) - not a Legends Arceus main
+  save. `SaveUtil.SIZE_G8LA`/`SIZE_G8LA_1` require exactly 1,272,798 or
+  1,288,454 bytes; this file is far smaller, and its "pcdata" name matches
+  the pattern of a PC-box-only partial dump (same situation as the Gen3
+  `SAV3RSBox` GCI file above). No SAV8LA (Legends Arceus proper) file was
+  available in this sweep - Gen 8 real-save verification above rests on
+  Sword/HeartGold only, not Legends Arceus specifically.
+- `Pokemon Mystery Dungeon - Red Rescue Team (USA, Australia).SAV` - Mystery
+  Dungeon is a different game family with its own save format; PKHeX.Core
+  does not support it. Correctly unrecognized, not a bug.
+- All individual per-Pokémon export files (`.pk3`, `.pb7`, etc.) and the
+  `Box Data Dump.csv` under `PLGP Master Trainer Counters\` - these are
+  single-entity exports, not save containers, so `SaveUtil.GetSaveFile`
+  correctly returns null for them.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any
