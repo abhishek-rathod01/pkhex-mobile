@@ -46,12 +46,14 @@ public partial class MainPage : ContentPage
 
 			FileResultLabel.Text = text;
 			ViewPartyBtn.IsVisible = loadedSave is { PartyCount: > 0 };
+			ViewBoxesBtn.IsVisible = loadedSave is { HasBox: true };
 		}
 		catch (Exception ex)
 		{
 			FileResultLabel.Text = $"Error: {ex.Message}";
 			loadedSave = null;
 			ViewPartyBtn.IsVisible = false;
+			ViewBoxesBtn.IsVisible = false;
 		}
 	}
 
@@ -83,5 +85,14 @@ public partial class MainPage : ContentPage
 
 		NavigationState.PendingSave = loadedSave;
 		await Shell.Current.GoToAsync(nameof(PartyListPage));
+	}
+
+	private async void OnViewBoxesClicked(object? sender, EventArgs e)
+	{
+		if (loadedSave is null)
+			return;
+
+		NavigationState.PendingSave = loadedSave;
+		await Shell.Current.GoToAsync(nameof(BoxListPage));
 	}
 }

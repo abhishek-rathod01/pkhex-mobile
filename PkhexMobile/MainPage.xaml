@@ -49,6 +49,13 @@
                 IsVisible="False"
                 Clicked="OnViewPartyClicked"
                 HorizontalOptions="Fill" />
+
+            <Button
+                x:Name="ViewBoxesBtn"
+                Text="View Boxes"
+                IsVisible="False"
+                Clicked="OnViewBoxesClicked"
+                HorizontalOptions="Fill" />
         </VerticalStackLayout>
     </ScrollView>
 

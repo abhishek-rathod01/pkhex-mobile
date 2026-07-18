@@ -418,6 +418,61 @@ landed, with no separate submit step needed - confirming Item 1(a)/(d)'s
 only in code review. The EV row showing `65535` for every stat visually
 corroborates the Gen1/2 EV finding logged above.
 
+## PC box viewing, read-only (2026-07-18)
+
+Extends the existing party-list pattern to PC boxes: `BoxListPage`
+(`BoxListPage.xaml[.cs]`) adds a box-name `Picker` above a `CollectionView`
+that reuses the same `PartyEntryDisplay` record and item template as
+`PartyListPage`. `MainPage` grows a "View Boxes" button next to "View
+Party", shown only when `sav.HasBox` (not every save type has PC storage).
+Tapping a box entry opens the existing `PokemonDetailPage`.
+
+- **Box names**: read via `IBoxDetailNameRead.GetBoxName(box)` when the
+  save implements it, falling back to `BoxDetailNameExtensions
+  .GetDefaultBoxName(box)` ("Box N") otherwise - same pattern
+  `SlotCache.cs` already uses internally in PKHeX.Core, not invented here.
+- **Empty slots are filtered**: unlike `PartyData` (always fully populated
+  for however many mons are in the party), a box is `BoxSlotCount` slots
+  (20 for Gen1/2, 30 for Gen3+) mostly empty - `GetBoxSlotAtIndex(box,
+  slot)` is called for every slot and any result with `Species == 0`
+  (PKHeX.Core's standard empty-slot sentinel, confirmed via existing usage
+  in `SaveFile.cs`/`SAV4.cs`) is skipped rather than rendered as a blank row.
+- **Read-only guarantee - navigation-level, not a UI toggle**: box entries
+  navigate to `PokemonDetailPage` with `NavigationState.PendingPokemonSave`
+  explicitly set to **null** (rather than the real `SaveFile`, as
+  `PartyListPage` does). `PokemonDetailPage.LoadPokemon` already computes
+  `SaveChangesBtn.IsVisible = parentSave is not null`, so the Save Changes
+  button is hidden entirely for box entries with no page-specific code
+  needed - the existing party detail page's own null-check *is* the
+  read-only guarantee, not a new one bolted on. This also sidesteps a real
+  hazard: `OnSaveChangesClicked` writes via `SaveFile.SetPartySlotAtIndex`,
+  which is party-slot-indexed (max 6 slots) - had a box mon's save been
+  routed through that path with a real `SaveFile` and a box-slot index
+  (0-29), it would have written into the wrong party slot or thrown/
+  corrupted data, since box storage and party storage are separate regions
+  entirely (`GetBoxSlotOffset` vs `GetPartyOffset`, unrelated address
+  spaces). Nickname/Level/IV/EV fields are still populated and interactively
+  focus/type-able (they're just `Entry` controls, no per-page read-only
+  flag exists or is needed) - the `null` parent save is the only guard, and
+  it's sufficient because nothing downstream of "no Save button" can
+  persist a change.
+
+Verified against two real saves with populated boxes, chosen via a quick
+inventory harness (`verify/BoxInventory/Program.cs`) that counts non-empty
+slots per box across all real saves in the folder before committing to
+which ones to drive through the emulator:
+
+| Gen | Save | Result |
+|---|---|---|
+| 1 | `POKEMON RED-0.sav` (`gen1_real.sav`) | 12 boxes, default "Box N" names, 235 occupied slots total. Box 1: 20/20 shown correctly. Switched to a different box via the Picker (all 12 box names listed) - different Pokémon shown. Tapped a box entry - **no Save Changes button appeared**, fields showed real Nickname/Level/IV(0-15 range, Gen1)/EV/Nature/Ability/Moves. |
+| 9 | `pkmnscarlet_100\main` (`gen9_real.sav`) | 32 boxes, real "Box N" names from the save itself (not the default fallback), 618 occupied slots total. Box 1: 30/30 shown correctly, matching the harness's count exactly. Tapped a box entry (Floragato) - real IVs (0-31 range, Gen9), Nature Impish, Ability Overgrow, real moves shown, **no Save Changes button**. |
+
+Screenshots in `verify/OnDeviceBoxes/screenshots/`.
+
+Not done (explicitly out of scope for this pass, per instructions): no
+box→party moves, no slot swaps, no box editing. Species/move editing and
+legality checking are also explicitly deferred to a future session.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any
