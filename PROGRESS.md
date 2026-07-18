@@ -270,6 +270,67 @@ section above) of a bug that only surfaced on-device and never showed up in
 `dotnet build`. The edit/export/reload *data path* is verified; the
 on-device *file I/O plumbing* around it is not, in this pass.
 
+## Gen1/2 IV/EV field caps — design decision resolved (2026-07-18)
+
+The open design question from the previous session ("Needs your decision" in
+`WAKEUP.md`) is resolved: **option 3** (generation-aware field caps), not
+option 1 (leave as-is) or option 2 (post-save normalization message).
+
+This matches PKHeX desktop's verified approach (`PKHeX.WinForms/Util/
+WinFormsUtil.cs` uses `NumericUpDown` controls with `Maximum` set to 15 for
+Gen1/2 IV controls, plus a `SetValueClamped` backstop for programmatic sets)
+rather than the "accept anything, then silently normalize on save" behavior
+the app had before this pass.
+
+`PokemonDetailPage.xaml[.cs]` changes:
+
+- **IV field cap**: `ivMax` is now computed per-Pokémon from `pk.Generation`
+  (15 for Gen1/2, 31 for Gen3+) instead of a hardcoded 31. A `TextChanged`
+  handler on the four independently-stored IV fields (Atk/Def/SpA/Spe)
+  clamps any typed value above `ivMax` back down live, as the user types -
+  out-of-range values can't be entered in the first place, not just rejected
+  at save time. The save-time `TryParseStat` check was also switched from a
+  hardcoded 31 to the same `ivMax`, so it stays correct as a second-layer
+  backstop even though the live clamp should make it unreachable in normal
+  use.
+- **HP IV (derived, no storage)**: `IvHpEntry.IsEnabled = false` for Gen1/2;
+  its text is recomputed live from the other four DVs' low bits
+  (`((atk&1)<<3)|((def&1)<<2)|((spe&1)<<1)|(spa&1)`, matching
+  `GBPKM.cs:185`) whenever any of them changes, so it always shows what will
+  actually be saved instead of accepting input that has no effect.
+- **SpA/SpD linkage**: `IvSpdEntry` and `EvSpdEntry` are also disabled for
+  Gen1/2 and mirror `IvSpaEntry`/`EvSpaEntry` live - Gen1/2 has one shared
+  "Special" DV/stat-exp value (`GBPKM.cs:182-183,190-191`), so the two
+  fields can no longer be edited independently and silently diverge from
+  what gets written.
+- **Defensive clamp backstop (d)**: `LoadPokemon` now populates every IV
+  entry via `Math.Clamp(p.IV_X, 0, ivMax)` rather than a raw `.ToString()`,
+  so even a PKM object that somehow held an out-of-range value (corrupted
+  data, future format) can't get echoed into a field whose cap it violates.
+  The section label (`IvRangeLabel`) also switches text for Gen1/2 to spell
+  out the derived/linked fields.
+- **Out-of-range load safety (e)**: `verify/Gen12IvCap/Program.cs` confirms
+  two things can't crash the app: (1) forcing an over-range IV through the
+  real PKM setters (`pk.IV_ATK = 999` etc.) against real Gen1 (`POKEMON
+  RED-0.sav`) and Gen2 (`Pokemon - Crystal Version (UE) (V1.1) C!.SAV`)
+  saves - the library's own setter clamp (`GBPKM.cs:186-189`,
+  `value > 0xF ? 0xF : value`) already catches this before the app-level
+  clamp would ever see it, and `SetPartySlotAtIndex`/`Write()`/reload all
+  survive; (2) the app's own `Math.Clamp` backstop against adversarial
+  synthetic input (`int.MaxValue`, `int.MinValue`, etc.) directly, since a
+  real Gen1/2 DV is bit-packed into a 4-bit nibble and so **cannot**
+  structurally exceed 15 in genuine save data - true "out of range" input
+  can only originate from a bug or a future format, which is exactly what
+  the synthetic-input half of the harness checks against. Both halves pass
+  for all six probed values on both real save files.
+
+Deliberately not addressed in this pass (out of scope for Item 1, which
+covers IV caps only): Gen1/2 "EVs" are actually 16-bit Stat Exp
+(hardware range 0-65535), not the modern 0-252 EV system - the EV entry
+fields still validate against 252 for every generation, same as before.
+This is a separate, pre-existing inaccuracy for Gen1/2 EVs, not something
+introduced or fixed here.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any
