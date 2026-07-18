@@ -130,6 +130,37 @@ Not recognized (checked individually, both expected):
   single-entity exports, not save containers, so `SaveUtil.GetSaveFile`
   correctly returns null for them.
 
+## Edit round-trip verification (2026-07-18)
+
+`verify/EditRoundTrip/Program.cs` replicates the app's exact edit code path
+(`pk.Nickname` / `pk.IsNicknamed` / `pk.CurrentLevel` →
+`SaveFile.SetPartySlotAtIndex` → `SaveFile.Write()`, then reloads the
+exported bytes through the same `SaveUtil.GetSaveFile(byte[])` call
+`MainPage.TryParseSaveFile` uses when a file is picked) against real save
+files for Gen1, Gen5, and Gen9:
+
+| Gen | Save | Edit applied | Round-trip |
+|---|---|---|---|
+| 1 | `POKEMON RED-0.sav` (real) | Nickname MEW→TESTEDIT, Level 100→42 | ✅ PASS |
+| 5 | `Pokemon Black Version.sav` (real) | Nickname Snake→TESTEDIT, Level 100→55 | ✅ PASS |
+| 9 | `pkmnscarlet_100\main` (real) | Nickname Skeledirge→TESTEDIT, Level 100→88 | ✅ PASS |
+
+All three: nickname and level read back correctly from the re-parsed
+exported bytes, and the original file on disk was confirmed byte-for-byte
+unchanged after the run (the export path only ever produces an in-memory
+`byte[]`, handed to `FileSaver` for a new file in the app — never written
+back to the original path).
+
+Note for future harness authors: `SaveUtil.GetSaveFile(byte[])` does not
+clone the array it's given - it wraps it as `Memory<byte>`, so subsequent
+edits/`Write()` calls mutate that same array in place. The first version of
+this harness compared the post-edit array against itself and wrongly
+flagged the original file as changed; fixed by cloning the byte array
+immediately after `File.ReadAllBytes` before ever passing it to
+`SaveUtil.GetSaveFile`. Not an app bug (the app never writes the picked
+byte array back to `path`), but worth knowing before writing similar
+verification code.
+
 ## Known limitations / not covered in this pass
 
 - No real Pokémon save files were used anywhere in this project, for any
