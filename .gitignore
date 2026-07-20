@@ -3,18 +3,40 @@ bin/
 obj/
 *.user
 *.suo
+*.userprefs
+*.binlog
+TestResults/
+publish/
+artifacts/
 
 ## Visual Studio / Rider
 .vs/
 .idea/
 *.userosscache
 *.sln.docstates
+*.DotSettings.user
 
-## Android
+## NuGet
+packages/
+*.nupkg
+project.lock.json
+
+## Android / Android SDK & emulator
 *.apk
 *.aab
 *.keystore
 !debug.keystore
+*.jks
+local.properties
+.gradle/
+.cxx/
+*.androidproj.user
+/android/.idea/
+
+## MAUI / mobile build output
+*.ipa
+*.dSYM.zip
+*.dSYM
 
 ## macOS
 .DS_Store
