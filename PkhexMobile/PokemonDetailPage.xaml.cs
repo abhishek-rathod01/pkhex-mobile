@@ -12,6 +12,12 @@ public partial class PokemonDetailPage : ContentPage
     int ivMax = 31;
     int evMax = 252;
 
+    // Picker index -> game ID maps, rebuilt per Pokémon from its format's MaxSpeciesID/MaxMoveID.
+    // Species list starts at ID 1 (0 = empty, never valid for a stored mon); move list starts at
+    // ID 0 so "(None)" is selectable to clear a slot.
+    readonly List<ushort> speciesIds = new();
+    readonly List<ushort> moveIds = new();
+
     public PokemonDetailPage()
     {
         InitializeComponent();
@@ -104,21 +110,75 @@ public partial class PokemonDetailPage : ContentPage
 
         RefreshGen12DerivedFields();
 
+        PopulateSpeciesPicker(p);
+        PopulateMovePickers(p);
+
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
 
+        // Nature/Ability stay read-only here: they're PID-derived on several generations
+        // (see verify/Gen3), so exposing them as free edits would be misleading. Species and
+        // moves are now editable via the pickers above, so they're no longer in this list.
         var rows = new List<StatRow>
         {
-            new("Species", PkmDisplayHelper.GetSpeciesName(p.Species)),
             new("Nature", PkmDisplayHelper.GetNatureName(p.Nature)),
             new("Ability", PkmDisplayHelper.GetAbilityName(p.Ability)),
-            new("Move 1", PkmDisplayHelper.GetMoveName(p.Move1)),
-            new("Move 2", PkmDisplayHelper.GetMoveName(p.Move2)),
-            new("Move 3", PkmDisplayHelper.GetMoveName(p.Move3)),
-            new("Move 4", PkmDisplayHelper.GetMoveName(p.Move4)),
         };
 
         StatsList.ItemsSource = rows;
+    }
+
+    private void PopulateSpeciesPicker(PKM p)
+    {
+        // Bound by this format's MaxSpeciesID so a species that structurally can't be stored in
+        // the save (e.g. a Gen9 'mon in a Gen1 file) is never even offered - this is a format
+        // constraint, not a legality judgement.
+        var names = GameInfo.Strings.Species;
+        int max = Math.Min(p.MaxSpeciesID, (ushort)(names.Count - 1));
+
+        speciesIds.Clear();
+        var items = new List<string>(max);
+        for (ushort id = 1; id <= max; id++)
+        {
+            speciesIds.Add(id);
+            items.Add(names[id]);
+        }
+        SpeciesPicker.ItemsSource = items;
+
+        int sel = speciesIds.IndexOf(p.Species);
+        SpeciesPicker.SelectedIndex = sel >= 0 ? sel : (items.Count > 0 ? 0 : -1);
+    }
+
+    private void PopulateMovePickers(PKM p)
+    {
+        var names = GameInfo.Strings.Move;
+        int max = Math.Min(p.MaxMoveID, (ushort)(names.Count - 1));
+
+        moveIds.Clear();
+        var items = new List<string>(max + 1);
+        // ID 0 is the empty "(None)" slot; GameInfo's own string for it is blank, so give it a
+        // readable label instead of an empty picker row.
+        moveIds.Add(0);
+        items.Add("(None)");
+        for (ushort id = 1; id <= max; id++)
+        {
+            moveIds.Add(id);
+            items.Add(names[id]);
+        }
+
+        SetMovePicker(Move1Picker, items, p.Move1);
+        SetMovePicker(Move2Picker, items, p.Move2);
+        SetMovePicker(Move3Picker, items, p.Move3);
+        SetMovePicker(Move4Picker, items, p.Move4);
+    }
+
+    private void SetMovePicker(Picker picker, List<string> items, ushort current)
+    {
+        picker.ItemsSource = items;
+        int sel = moveIds.IndexOf(current);
+        // A move the current format can't represent (out of range) falls back to "(None)" rather
+        // than crashing on an unfound index.
+        picker.SelectedIndex = sel >= 0 ? sel : 0;
     }
 
     private void OnIvIndependentEntryTextChanged(object? sender, TextChangedEventArgs e)
@@ -155,6 +215,12 @@ public partial class PokemonDetailPage : ContentPage
 
         IvSpdEntry.Text = IvSpaEntry.Text;
         EvSpdEntry.Text = EvSpaEntry.Text;
+    }
+
+    private ushort MoveIdFor(Picker picker)
+    {
+        int idx = picker.SelectedIndex;
+        return idx >= 0 && idx < moveIds.Count ? moveIds[idx] : (ushort)0;
     }
 
     private static bool TryParseStat(string? text, int max, out int value)
@@ -202,11 +268,51 @@ public partial class PokemonDetailPage : ContentPage
             return;
         }
 
+        // Resolve species/move selections up front so a bad picker state is reported before any
+        // mutation happens.
+        if (SpeciesPicker.SelectedIndex < 0 || SpeciesPicker.SelectedIndex >= speciesIds.Count)
+        {
+            SaveStatusLabel.Text = "Select a species before saving.";
+            return;
+        }
+        ushort newSpecies = speciesIds[SpeciesPicker.SelectedIndex];
+        ushort[] newMoves =
+        {
+            MoveIdFor(Move1Picker),
+            MoveIdFor(Move2Picker),
+            MoveIdFor(Move3Picker),
+            MoveIdFor(Move4Picker),
+        };
+
+        bool speciesChanged = newSpecies != pk.Species;
+        bool movesChanged = newMoves[0] != pk.Move1 || newMoves[1] != pk.Move2 ||
+                            newMoves[2] != pk.Move3 || newMoves[3] != pk.Move4;
+
+        // A change to any of these makes the stored party stat block (HP/Atk/.../Stat_Level)
+        // stale, so it must be recomputed below. Captured before mutation.
+        bool statsAffected = speciesChanged ||
+                             level != pk.CurrentLevel ||
+                             ivHp != pk.IV_HP || ivAtk != pk.IV_ATK || ivDef != pk.IV_DEF ||
+                             ivSpa != pk.IV_SPA || ivSpd != pk.IV_SPD || ivSpe != pk.IV_SPE ||
+                             evHp != pk.EV_HP || evAtk != pk.EV_ATK || evDef != pk.EV_DEF ||
+                             evSpa != pk.EV_SPA || evSpd != pk.EV_SPD || evSpe != pk.EV_SPE;
+
         try
         {
             pk.Nickname = NicknameEntry.Text ?? string.Empty;
             pk.IsNicknamed = true;
+
+            // Species BEFORE level: CurrentLevel is stored as EXP, and EXP<->level depends on the
+            // species' growth-rate group. Setting the level first (under the old species' growth
+            // rate) and then changing species would reinterpret that EXP under the new growth rate
+            // and land on the wrong level (e.g. a level-50 Skeledirge becoming a level-45 Garchomp).
+            // The species setter also updates format-specific derived fields (e.g. Gen1 internal
+            // index + stored types).
+            pk.Species = newSpecies;
             pk.CurrentLevel = level;
+            // SetMoves (not raw Move1..4) so current PP is recomputed for the new moves - setting
+            // the move IDs alone would leave stale PP from the previous moves.
+            pk.SetMoves(newMoves);
 
             pk.IV_HP = ivHp;
             pk.IV_ATK = ivAtk;
@@ -222,6 +328,16 @@ public partial class PokemonDetailPage : ContentPage
             pk.EV_SPD = evSpd;
             pk.EV_SPE = evSpe;
 
+            // Recompute the party stat block from the (possibly new) species/level/IVs/EVs/nature.
+            // SaveFile.SetPartyValues only calls this when no stats are present (Stat_HPMax == 0);
+            // an existing party mon already has stats, so without this an edited mon would export
+            // with a stale stat block - e.g. a species changed to Charizard while still carrying
+            // the previous species' HP. ResetPartyStats also syncs Stat_Level to CurrentLevel.
+            // Gated on statsAffected so a nickname-only edit doesn't heal/clear status as a side
+            // effect. LoadStats (called inside) is generation-aware (Gen1/2 DVs + stat exp, etc.).
+            if (statsAffected)
+                pk.ResetPartyStats();
+
             parentSave.SetPartySlotAtIndex(pk, partyIndex);
 
             var bytes = parentSave.Write().ToArray();
@@ -230,14 +346,22 @@ public partial class PokemonDetailPage : ContentPage
             var fileName = $"edited_{DateTime.Now:yyyyMMdd_HHmmss}.sav";
             var result = await FileSaver.Default.SaveAsync(fileName, stream, CancellationToken.None);
 
-            SaveStatusLabel.Text = result.IsSuccessful
-                ? $"Saved to: {result.FilePath}"
-                : result.IsCancelled
+            if (result.IsSuccessful)
+            {
+                // Reinforce the caveat at the moment it matters: only when the user actually
+                // changed species/moves, so a plain nickname/stat edit isn't nagged.
+                var note = (speciesChanged || movesChanged)
+                    ? " (Species/move edits are applied as-is; other tools may flag this as illegal.)"
+                    : string.Empty;
+                SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
+                TitleLabel.Text = PkmDisplayHelper.GetDisplayName(pk);
+            }
+            else
+            {
+                SaveStatusLabel.Text = result.IsCancelled
                     ? "Save cancelled."
                     : $"Save failed: {result.Exception?.Message}";
-
-            if (result.IsSuccessful)
-                TitleLabel.Text = PkmDisplayHelper.GetDisplayName(pk);
+            }
         }
         catch (Exception ex)
         {

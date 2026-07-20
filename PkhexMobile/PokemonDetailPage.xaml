@@ -15,6 +15,22 @@
             <Label Text="Level" FontAttributes="Bold" />
             <Entry x:Name="LevelEntry" Keyboard="Numeric" />
 
+            <Label Text="Species" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Picker x:Name="SpeciesPicker" Title="Select species" />
+
+            <Label Text="Moves" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Picker x:Name="Move1Picker" Title="Move 1" />
+            <Picker x:Name="Move2Picker" Title="Move 2" />
+            <Picker x:Name="Move3Picker" Title="Move 3" />
+            <Picker x:Name="Move4Picker" Title="Move 4" />
+
+            <Label x:Name="LegalityWarningLabel"
+                   Text="⚠ Species and move edits are applied exactly as chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged as illegal by other tools. This is expected."
+                   TextColor="#B26A00"
+                   FontSize="13"
+                   LineBreakMode="WordWrap"
+                   Margin="0,6,0,0" />
+
             <Label x:Name="IvRangeLabel" Text="IVs (0-31 each)" FontAttributes="Bold" Margin="0,10,0,0" />
             <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="4">
                 <Entry x:Name="IvHpEntry" Grid.Column="0" Keyboard="Numeric" Placeholder="HP" />

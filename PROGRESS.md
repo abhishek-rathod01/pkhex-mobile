@@ -555,3 +555,102 @@ app); PKHeX.Core's own `SaveUtil.GetSaveFile`/party-read APIs were the only
 thing it called, so this is a faithful proxy for "reload through the file
 picker," matching the same caveat already documented for the IV/EV
 round-trip work earlier in this file.
+
+## Species + move editing, behind a legality warning (2026-07-20)
+
+Extended the detail-page editor from nickname/level/IV/EV to also cover
+**species** and the **four moves**, each via a `Picker` (dropdown) in
+`PokemonDetailPage.xaml[.cs]`. Species and moves are no longer in the
+read-only `StatsList` (Nature/Ability remain there - they're PID-derived on
+several gens, so exposing them as free edits would mislead).
+
+- **Species picker**: populated 1..`pk.MaxSpeciesID` (format-specific
+  structural bound - a Gen9 'mon is never offered in a Gen1 file; this is a
+  format constraint, not a legality judgement). `pk.Species = id` on save;
+  the format setter does the derived-field work (e.g. Gen1 internal-index +
+  stored types, confirmed via `PK1.SetSpeciesValues`).
+- **Move pickers**: index 0 = "(None)" (clears a slot), 1..`pk.MaxMoveID`.
+  Applied via **`pk.SetMoves(newMoves)`**, not raw `Move1..4`, so current PP
+  is recomputed for the new moves (`SetMaximumPPCurrent`). Setting the IDs
+  alone would leave stale PP from the previous moves - the move-PP analog of
+  the level/stat-recalc class of bug.
+- **Legality warning**: a persistent orange label under the species/move
+  pickers, always visible: *"⚠ Species and move edits are applied exactly as
+  chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged
+  as illegal by other tools. This is expected."* Plus, on a successful save
+  where species/moves actually changed, the status line appends *"(Species/
+  move edits are applied as-is; other tools may flag this as illegal.)"*. No
+  auto-validation or auto-correction is performed anywhere (out of scope by
+  request).
+
+### Two real bugs found and fixed while verifying (not pre-planned)
+
+The verification harness (`verify/SpeciesMoveEdit/Program.cs`) was written to
+actively hunt for the edge-case classes earlier sessions were bitten by
+(stale derived state, gen-specific coupling), and it surfaced two genuine
+defects - **both also affected the pre-existing level/IV/EV edit path**, not
+just the new species/move code:
+
+1. **Party stat block never recomputed on edit.** `SaveFile.SetPartyValues`
+   only calls `ResetPartyStats()` when `!pk.PartyStatsPresent` (i.e.
+   `Stat_HPMax == 0`). Every real party mon already has stats present, so the
+   stat block (HP/Atk/.../`Stat_Level`) was **never** recalculated on save -
+   for species changes (a Charizard would keep Mew's HP) *and* for the older
+   level/IV/EV edits. The previous session's PROGRESS note claiming
+   `SetPartySlotAtIndex` recalculates the stat block was **wrong**; the
+   harness proves it (species changed, HP unchanged). **Fix:**
+   `PokemonDetailPage.OnSaveChangesClicked` now calls `pk.ResetPartyStats()`
+   before `SetPartySlotAtIndex`, gated on `statsAffected` (species/level/IV/EV
+   changed) so a nickname-only edit doesn't heal/clear status as a side
+   effect. `ResetPartyStats`→`LoadStats` is generation-aware (Gen1/2 DVs +
+   stat exp, PA8/PB7 overrides). Verified: Gen1 Mew(399 HP)→Charizard L50 now
+   reads 182; Gen9 Skeledirge→Garchomp L50 reads 192.
+2. **Level misread when species AND level both change (EXP/growth-rate
+   ordering).** `CurrentLevel` is stored as EXP, and EXP↔level depends on the
+   species' growth-rate group. The original code set `CurrentLevel` *before*
+   `Species`, so a level set under the old growth rate was then reinterpreted
+   under the new species' rate - e.g. a level-50 Skeledirge became a level-45
+   Garchomp on reload. **Fix:** set `pk.Species` **before** `pk.CurrentLevel`.
+   Verified: after the reorder, `Stat_Level == 50` for all three gens.
+
+### Round-trip verification (`verify/SpeciesMoveEdit/Program.cs`)
+
+Replicates the app's exact path (`pk.Species` → `pk.SetMoves` →
+`ResetPartyStats` → `SetPartySlotAtIndex` → `Write()` →
+`SaveUtil.GetSaveFile(byte[])`) against the real Gen1/Gen5/Gen9 saves, each
+changing species + 4 moves (Gen5 also clears two slots to "(None)") + level:
+
+| Gen | Save | Edit | Result |
+|---|---|---|---|
+| 1 | `POKEMON RED-0.sav` | Mew→Charizard, 4 moves, L50 | ✅ species/moves/PP/stat block + Gen1 stored types all round-trip |
+| 5 | `Pokemon Black Version.sav` | Serperior→Pikachu, 2 moves + 2 cleared, L50 | ✅ cleared slots read back PP=0 |
+| 9 | `pkmnscarlet_100\main` | Skeledirge→Garchomp, 4 moves, L50 | ✅ all round-trip |
+
+Plus a **form-staleness probe**: the app doesn't edit Form, but if a loaded
+mon has a non-zero Form and species changes, the stale Form persists (we
+deliberately don't auto-correct - that's legality). Confirmed this cannot
+crash: `PersonalInfo.HasForm` falls back to the base (form-0) entry for an
+out-of-range form, so `ResetPartyStats`/`Write()`/reload all survive and
+compute base-form stats (synthetic Garchomp Form=20 → HP 192 = base form).
+All checks pass; originals confirmed byte-for-byte untouched on disk.
+
+### On-device verification (`PkhexMobile_Emulator`, real FileSaver/FilePicker)
+
+Drove the full flow against the real `gen9_real.sav`: loaded → View Party →
+Skeledirge → changed **Species Skeledirge→Quaquaval**, **Move 1 Torch
+Song→Aqua Step**, **Level 100→50** via the on-screen pickers/keyboard → Save
+Changes → the real FileSaver dialog appeared, status showed the species/move
+note → saved to a distinct name (`gen9_specmove_test.sav`, cleared the
+pre-filled name per the documented autocomplete hazard) → reloaded that file
+through the real file picker → party list shows slot 1 as species
+**Quaquaval Lv.50** (nickname "Skeledirge" retained) → detail shows Species
+Quaquaval, Move 1 Aqua Step, Level 50. All edits round-tripped through real
+on-device file I/O. Screenshots in `verify/OnDeviceSpeciesMove/screenshots/`.
+
+### Explicitly out of scope this pass (unchanged from prior sessions)
+
+No legality validation or auto-correction (by request). Form is not
+user-editable and not auto-reset on species change (safe - falls back to base
+form). Nature/Ability remain read-only. Box (PC) mons stay read-only via the
+existing null-`parentSave` guard (no Save button); the pickers render but
+can't persist there, matching the existing nickname/IV/EV behavior.
