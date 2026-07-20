@@ -10,6 +10,7 @@ public partial class PokemonDetailPage : ContentPage
     int partyIndex;
     bool isGen12;
     int ivMax = 31;
+    int evMax = 252;
 
     public PokemonDetailPage()
     {
@@ -24,7 +25,15 @@ public partial class PokemonDetailPage : ContentPage
         // there too, not just at save time.
         IvHpEntry.TextChanged += OnIvIndependentEntryTextChanged;
         IvSpdEntry.TextChanged += OnIvIndependentEntryTextChanged;
-        EvSpaEntry.TextChanged += OnEvSpaEntryTextChanged;
+
+        EvHpEntry.TextChanged += OnEvIndependentEntryTextChanged;
+        EvAtkEntry.TextChanged += OnEvIndependentEntryTextChanged;
+        EvDefEntry.TextChanged += OnEvIndependentEntryTextChanged;
+        EvSpaEntry.TextChanged += OnEvIndependentEntryTextChanged;
+        EvSpeEntry.TextChanged += OnEvIndependentEntryTextChanged;
+        // SpD is disabled for Gen1/2 (mirrors SpA, see LoadPokemon) - harmless no-op there,
+        // same reasoning as IvSpdEntry above.
+        EvSpdEntry.TextChanged += OnEvIndependentEntryTextChanged;
     }
 
     protected override void OnAppearing()
@@ -53,6 +62,9 @@ public partial class PokemonDetailPage : ContentPage
         // generations' IV controls.
         isGen12 = p.Generation is 1 or 2;
         ivMax = isGen12 ? 15 : 31;
+        // Gen1/2 "EVs" are real 16-bit Stat Exp (0-65535), not the modern 0-252 EV system -
+        // confirmed against real Gen1/2 saves with maxed stat exp (see PROGRESS.md).
+        evMax = isGen12 ? 65535 : 252;
 
         TitleLabel.Text = PkmDisplayHelper.GetDisplayName(p);
         NicknameEntry.Text = p.Nickname;
@@ -67,12 +79,15 @@ public partial class PokemonDetailPage : ContentPage
         IvSpdEntry.Text = Math.Clamp(p.IV_SPD, 0, ivMax).ToString();
         IvSpeEntry.Text = Math.Clamp(p.IV_SPE, 0, ivMax).ToString();
 
-        EvHpEntry.Text = p.EV_HP.ToString();
-        EvAtkEntry.Text = p.EV_ATK.ToString();
-        EvDefEntry.Text = p.EV_DEF.ToString();
-        EvSpaEntry.Text = p.EV_SPA.ToString();
-        EvSpdEntry.Text = p.EV_SPD.ToString();
-        EvSpeEntry.Text = p.EV_SPE.ToString();
+        // Defensive clamp (backstop): same reasoning as the IV fields above - display value
+        // can never exceed this generation's real range even if the loaded PKM somehow holds
+        // something outside it.
+        EvHpEntry.Text = Math.Clamp(p.EV_HP, 0, evMax).ToString();
+        EvAtkEntry.Text = Math.Clamp(p.EV_ATK, 0, evMax).ToString();
+        EvDefEntry.Text = Math.Clamp(p.EV_DEF, 0, evMax).ToString();
+        EvSpaEntry.Text = Math.Clamp(p.EV_SPA, 0, evMax).ToString();
+        EvSpdEntry.Text = Math.Clamp(p.EV_SPD, 0, evMax).ToString();
+        EvSpeEntry.Text = Math.Clamp(p.EV_SPE, 0, evMax).ToString();
 
         // Gen1/2: HP IV has no independent storage (derived from the low bit of the other
         // four DVs) and SpA/SpD share one "Special" DV/stat-exp value - grey both out so they
@@ -83,6 +98,9 @@ public partial class PokemonDetailPage : ContentPage
         IvRangeLabel.Text = isGen12
             ? "IVs / DVs (0-15 each; HP derived, SpD linked to SpA)"
             : "IVs (0-31 each)";
+        EvRangeLabel.Text = isGen12
+            ? "EVs / Stat Exp (0-65535 each; SpD linked to SpA)"
+            : "EVs (0-252 each)";
 
         RefreshGen12DerivedFields();
 
@@ -109,11 +127,15 @@ public partial class PokemonDetailPage : ContentPage
         RefreshGen12DerivedFields();
     }
 
-    private void OnEvSpaEntryTextChanged(object? sender, TextChangedEventArgs e) => RefreshGen12DerivedFields();
+    private void OnEvIndependentEntryTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        ClampEntryToMax(sender as Entry, evMax);
+        RefreshGen12DerivedFields();
+    }
 
     private static void ClampEntryToMax(Entry? entry, int max)
     {
-        if (entry is null || !byte.TryParse(entry.Text, out var value) || value <= max)
+        if (entry is null || !int.TryParse(entry.Text, out var value) || value <= max)
             return;
         entry.Text = max.ToString();
         entry.CursorPosition = entry.Text.Length;
@@ -135,10 +157,10 @@ public partial class PokemonDetailPage : ContentPage
         EvSpdEntry.Text = EvSpaEntry.Text;
     }
 
-    private static bool TryParseStat(string? text, int max, out byte value)
+    private static bool TryParseStat(string? text, int max, out int value)
     {
         value = 0;
-        if (!byte.TryParse(text, out var parsed) || parsed > max)
+        if (!int.TryParse(text, out var parsed) || parsed < 0 || parsed > max)
             return false;
         value = parsed;
         return true;
@@ -169,11 +191,14 @@ public partial class PokemonDetailPage : ContentPage
             return;
         }
 
-        if (!TryParseStat(EvHpEntry.Text, 252, out var evHp) || !TryParseStat(EvAtkEntry.Text, 252, out var evAtk) ||
-            !TryParseStat(EvDefEntry.Text, 252, out var evDef) || !TryParseStat(EvSpaEntry.Text, 252, out var evSpa) ||
-            !TryParseStat(EvSpdEntry.Text, 252, out var evSpd) || !TryParseStat(EvSpeEntry.Text, 252, out var evSpe))
+        if (!TryParseStat(EvHpEntry.Text, evMax, out var evHp) || !TryParseStat(EvAtkEntry.Text, evMax, out var evAtk) ||
+            !TryParseStat(EvDefEntry.Text, evMax, out var evDef) || !TryParseStat(EvSpaEntry.Text, evMax, out var evSpa) ||
+            !TryParseStat(EvSpdEntry.Text, evMax, out var evSpd) || !TryParseStat(EvSpeEntry.Text, evMax, out var evSpe))
         {
-            SaveStatusLabel.Text = "EVs must be numbers between 0 and 252.";
+            // Defensive clamp backstop: the live TextChanged handlers above already prevent
+            // typing past evMax, so this should be unreachable in normal use - but re-validate
+            // here too rather than trusting the UI state alone before writing to the save.
+            SaveStatusLabel.Text = $"EVs must be numbers between 0 and {evMax}.";
             return;
         }
 

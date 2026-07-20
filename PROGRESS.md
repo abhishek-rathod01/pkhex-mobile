@@ -483,3 +483,75 @@ legality checking are also explicitly deferred to a future session.
   separately through this UI.
 - Editing is out of scope for this pass by design - everything above is
   read-only display.
+
+## Gen1/2 EV save-blocking bug fixed (2026-07-20)
+
+Fixed the bug logged in the previous session's "Known bug, not fixed" section
+(`WAKEUP.md`): EV fields parsed into a `byte` and validated against a
+hardcoded 252 cap for every generation, so `byte.TryParse("65535")` failed
+outright and `OnSaveChangesClicked` blocked saving *any* edit - even a
+nickname-only change - on a Gen1/2 mon that already had real stat exp loaded.
+
+Mirrors exactly what the earlier IV cap fix (`df48f97`/`f4d88e8`) did, just
+for EVs:
+
+- `PokemonDetailPage.xaml.cs` gains an `evMax` field, computed the same way
+  as `ivMax` (`isGen12 ? 65535 : 252`), since Gen1/2 "EVs" are real 16-bit
+  Stat Exp, not the modern 0-252 EV system.
+- All six EV `Entry` fields are live-clamped to `evMax` as the user types
+  (`OnEvIndependentEntryTextChanged`, wired the same way the IV fields
+  already were), not just checked at save time.
+- `LoadPokemon` populates EV fields via `Math.Clamp(p.EV_X, 0, evMax)`
+  (defensive backstop, same reasoning as the existing IV backstop) and the
+  EV section label (`EvRangeLabel`, newly named in the XAML) switches text
+  for Gen1/2 to spell out the SpD-linked-to-SpA relationship, mirroring
+  `IvRangeLabel`.
+- `TryParseStat` and `ClampEntryToMax` widened from `byte`/`byte.TryParse`
+  to `int`/`int.TryParse` to support the 0-65535 range (`EV_*`/`IV_*` are
+  `int` on the abstract `PKM` class already, so no cast is needed at the
+  assignment sites). `TryParseStat` also gained an explicit `parsed < 0`
+  rejection, since widening to `int` opened up negative values that
+  `byte.TryParse` could never produce.
+- Save-time validation (`OnSaveChangesClicked`) now checks EVs against
+  `evMax` instead of a hardcoded `252`, with the error message updated to
+  match (`"EVs must be numbers between 0 and {evMax}."`).
+
+### Verification against the real Gen1 save with maxed stat exp
+
+Driven on-device (`PkhexMobile_Emulator` AVD) against the real
+`POKEMON RED-0.sav` (MEW, level 100, all six EVs at 65535 - the exact mon
+that exposed this bug during Item 2 of the previous session):
+
+1. **Detail screen shows the fix live**: EV section label reads *"EVs / Stat
+   Exp (0-65535 each; SpD linked to SpA)"*, all six EV fields show `65535`
+   (SpD greyed out, mirroring SpA), matching the values logged previously.
+2. **Nickname-only edit now saves successfully**: changed only the nickname
+   (MEW → EVFIXOK), left all six EVs untouched at 65535, tapped Save
+   Changes - the real `FileSaver` document-picker dialog appeared
+   immediately (previously this exact scenario was blocked before ever
+   reaching that dialog, with "EVs must be numbers between 0 and 252").
+   Exported successfully to `gen1_ev_fix_saved.sav`.
+   - **Caught the same filename-autocomplete hazard documented in the
+     previous session's Item 2**: the save dialog's filename field
+     autocompleted to an unrelated existing file (`gen3_real.sav`) partway
+     through. Caught before confirming, corrected to a distinct name, and
+     verified the corrected text via `uiautomator dump` before tapping
+     SAVE.
+3. **EV value edit round-trips correctly on export/reload**: reloaded the
+   just-saved file through the real file picker (confirmed Trainer ASH,
+   Party 6, first entry "EVFIXOK" - i.e. actually the file just written,
+   not a stale one), confirmed all six EVs read back as `65535`
+   (proving the untouched EVs survived the earlier save uncorrupted), then
+   edited EV Atk from `65535` to `12345`, saved again, and read the
+   exported bytes back via a throwaway PKHeX.Core harness
+   (`SaveUtil.GetSaveFile` on the pulled file): `Nickname=EVFIXOK
+   Species=151 Level=100`, `EV: HP=65535 ATK=12345 DEF=65535 SPA=65535
+   SPD=65535 SPE=65535` - exactly the edited value, with every other field
+   preserved.
+
+Screenshots in `verify/OnDeviceEvFix/screenshots/`. The one-off read-back
+harness used for step 3 was deleted after use (not part of the committed
+app); PKHeX.Core's own `SaveUtil.GetSaveFile`/party-read APIs were the only
+thing it called, so this is a faithful proxy for "reload through the file
+picker," matching the same caveat already documented for the IV/EV
+round-trip work earlier in this file.
