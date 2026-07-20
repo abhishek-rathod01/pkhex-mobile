@@ -1,11 +1,27 @@
-# Wake-up summary — 2026-07-20 session (species + move editing)
+# Wake-up summary — species + move editing (latest), Gen1/2 EV fix
+
+Two commits landed most recently, both on 2026-07-20, both verified across
+Gen 1/5/9:
+
+- **`ec6c72d` — species + move editing** (this session, detailed below).
+- **`0861d2f` — Gen1/2 EV save-blocking bug fix** (earlier the same day).
+  Gen1/2 "EVs" are real 16-bit Stat Exp (0-65535), but the EV fields parsed
+  into a `byte` and validated against a hardcoded 252, so `byte.TryParse`
+  failed and `OnSaveChangesClicked` blocked saving *any* edit (even a
+  nickname-only one) on a Gen1/2 mon with real stat exp. Fixed by widening
+  parsing to `int` and making the EV cap generation-aware (65535 for Gen1/2,
+  252 for Gen3+), mirroring the earlier IV-cap fix. Verified on-device
+  against the real Gen1 save (MEW, all EVs 65535); full write-up in
+  `PROGRESS.md`.
+
+## This session: species + move editing (`ec6c72d`)
 
 Added species and move editing to the detail-page editor, behind a clear
 legality warning, round-trip verified across Gen 1/5/9 and driven once
-on-device through the real FileSaver/FilePicker. Committed. Nothing hit the
-"same error 3 times, stop and log as blocked" condition; two genuine
-pre-existing bugs were found *and fixed* (not just logged) because they made
-the new feature produce broken saves.
+on-device through the real FileSaver/FilePicker. Nothing hit the "same error
+3 times, stop and log as blocked" condition; two genuine pre-existing bugs
+were found *and fixed* (not just logged) because they made the new feature
+produce broken saves.
 
 ## What was built (commit: see `git log`)
 
@@ -71,12 +87,32 @@ changes species (which makes stale stats/level obviously wrong).
 
 ## What I'd do next
 
-1. **Species/move legality checking is still explicitly deferred** - the app
+**UI / presentation polish — not yet started (likely the next focus).** None
+of this is begun, and none touches the save-parsing/editing correctness
+already verified. See the "Roadmap / not yet started" section of
+`PROGRESS.md` for detail.
+
+1. **Design system integration.** The app still ships the stock .NET MAUI
+   template chrome - the "Hello, World! / Welcome to .NET MAUI" `MainPage`
+   with the submarine image and "Click me" button, default
+   `Colors.xaml`/`Styles.xaml`, default splash. No app-specific visual
+   language has been applied to the party/box/detail screens.
+2. **Sprite integration.** Every list and the detail screen are text-only
+   today. No Pokémon box sprites, item icons, or type badges yet; no sprite
+   assets are bundled (`Resources/Images` has only the template
+   `dotnet_bot.png`), and there's no sprite-resolution path in
+   `PkmDisplayHelper`.
+3. **App icon.** `Resources/AppIcon/appicon.svg`/`appiconfg.svg` are still the
+   default MAUI icon; no custom PkhexMobile icon authored.
+
+**Editing / correctness follow-ups (deferred by design):**
+
+4. **Species/move legality checking is still explicitly deferred** - the app
    applies edits as-is with a warning, by design. If a future pass wants it,
    PKHeX.Core has `LegalityAnalysis`; surface results read-only, don't
    auto-fix, and keep it opt-in.
-2. Box (PC) editing remains read-only (structural null-`parentSave` guard).
+5. Box (PC) editing remains read-only (structural null-`parentSave` guard).
    Box→party moves / slot swaps are still undone.
-3. Form and Ability/Nature are not user-editable yet; Form silently carries
+6. Form and Ability/Nature are not user-editable yet; Form silently carries
    over on species change (safe, base-form fallback). Editing Form would need
    a per-species form list and is its own scope.

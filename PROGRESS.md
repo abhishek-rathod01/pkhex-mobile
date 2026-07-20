@@ -654,3 +654,31 @@ user-editable and not auto-reset on species change (safe - falls back to base
 form). Nature/Ability remain read-only. Box (PC) mons stay read-only via the
 existing null-`parentSave` guard (no Save button); the pickers render but
 can't persist there, matching the existing nickname/IV/EV behavior.
+
+## Roadmap / not yet started (as of 2026-07-21)
+
+Functionally the app now does: file-picker load → save detection → party
+list → PC box list (read-only) → detail screen with editable
+nickname/level/species/moves/IVs/EVs → export via FileSaver. Everything is
+verified across Gen 1/5/9 (see the sections above and `verify/`).
+
+What has **not** been started yet - all UI/presentation polish, none of it
+touches the save-parsing or editing correctness already verified:
+
+- **Design system integration.** The app still ships the stock .NET MAUI
+  template chrome: the `MainPage` "Hello, World! / Welcome to .NET
+  Multi-platform App UI" home page with the submarine image and "Click me"
+  button, the default `Colors.xaml`/`Styles.xaml` palette, and the default
+  splash. No app-specific visual language (typography scale, spacing, color
+  tokens, component styles) has been applied to the party/box/detail screens.
+- **Sprite integration.** Every list and the detail screen are text-only
+  today (species name / nickname / level as labels). No Pokémon box sprites,
+  item icons, or type badges are rendered anywhere. `PkmDisplayHelper`
+  resolves names via `GameInfo.Strings`; there is no sprite-resolution path
+  yet, and no sprite image assets are bundled (`Resources/Images` holds only
+  the template `dotnet_bot.png`).
+- **App icon.** `Resources/AppIcon/appicon.svg` + `appiconfg.svg` are still
+  the default MAUI icon; no custom PkhexMobile icon has been authored.
+
+These are the obvious next items for a UI pass. None is blocked; they are
+just not yet begun.
