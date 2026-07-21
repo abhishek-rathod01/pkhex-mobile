@@ -33,6 +33,17 @@
                 </VerticalStackLayout>
             </Grid>
 
+            <!-- Legality result banner: read-only PKHeX.Core LegalityAnalysis snapshot, recomputed on
+                 load and after a successful save. No auto-fix - this only reports. -->
+            <Border x:Name="LegalityBanner">
+                <VerticalStackLayout Spacing="8">
+                    <Border x:Name="LegalityBadgeBorder">
+                        <Label x:Name="LegalityBadgeLabel" />
+                    </Border>
+                    <Label x:Name="LegalityMessageLabel" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Legality warning banner (always visible - no auto-fix/legality engine, see README) -->
             <Border BackgroundColor="{StaticResource StatusWarnBg}" Stroke="Transparent" StrokeThickness="0" Padding="12">
                 <Border.StrokeShape>

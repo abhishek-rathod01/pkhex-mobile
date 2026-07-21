@@ -70,6 +70,55 @@
         <Setter Property="TextColor" Value="{StaticResource TextTertiary}" />
     </Style>
 
+    <!-- LegalityBadge (components/indicators/LegalityBadge.jsx): pass/fail pill + banner -->
+    <Style x:Key="LegalityBadgePassStyle" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusPassBg}" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="StrokeShape">
+            <Setter.Value>
+                <RoundRectangle CornerRadius="999" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="LegalityBadgeFailStyle" TargetType="Border" BasedOn="{StaticResource LegalityBadgePassStyle}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusFailBg}" />
+    </Style>
+    <Style x:Key="LegalityBadgeLabelPassStyle" TargetType="Label">
+        <Setter Property="FontFamily" Value="ManropeBold" />
+        <Setter Property="FontSize" Value="{StaticResource Text2xs}" />
+        <Setter Property="TextColor" Value="{StaticResource StatusPassFg}" />
+        <Setter Property="CharacterSpacing" Value="0.6" />
+    </Style>
+    <Style x:Key="LegalityBadgeLabelFailStyle" TargetType="Label" BasedOn="{StaticResource LegalityBadgeLabelPassStyle}">
+        <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
+    </Style>
+    <Style x:Key="LegalityBannerPassStyle" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusPassBg}" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="StrokeShape">
+            <Setter.Value>
+                <RoundRectangle CornerRadius="12" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="LegalityBannerFailStyle" TargetType="Border" BasedOn="{StaticResource LegalityBannerPassStyle}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusFailBg}" />
+    </Style>
+    <Style x:Key="LegalityMessagePassStyle" TargetType="Label">
+        <Setter Property="FontFamily" Value="ManropeMedium" />
+        <Setter Property="FontSize" Value="{StaticResource TextSm}" />
+        <Setter Property="TextColor" Value="{StaticResource StatusPassFg}" />
+        <Setter Property="LineHeight" Value="{StaticResource LhNormal}" />
+    </Style>
+    <Style x:Key="LegalityMessageFailStyle" TargetType="Label" BasedOn="{StaticResource LegalityMessagePassStyle}">
+        <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
+    </Style>
+
     <Style x:Key="MonoValueStyle" TargetType="Label">
         <Setter Property="FontFamily" Value="JetBrainsMonoSemiBold" />
         <Setter Property="FontSize" Value="{StaticResource TextBase}" />

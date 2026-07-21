@@ -826,11 +826,65 @@ Gen3+ 0-31/0-252 and the Gen1/2 0-15/0-65535 paths), or the save/export
 round trip. The dirty/clean Save button - the one new behavior this session
 added - works as specified on every generation tested.
 
-## Roadmap / not yet started (as of 2026-07-21, post-reskin)
+## Read-only legality badge, wired to PKHeX.Core's LegalityAnalysis (2026-07-21)
 
-- **Legality-check engine.** `LegalityBadge` UI concept exists in the design
-  bundle but nothing is wired; `LegalityAnalysis` from PKHeX.Core is
-  available but not yet surfaced anywhere in the app.
+Added a read-only legality result banner to `PokemonDetailPage`, filling in
+the `LegalityBadge` concept the design bundle left unwired (see the previous
+session's "Scope decision" note - this was explicitly deferred out of the
+reskin pass, then requested as its own task). Uses PKHeX.Core's own
+`LegalityAnalysis(pk)` directly - no reimplementation of any legality logic,
+and no auto-fix anywhere (matches the existing species/move-edit warning's
+"applied as-is" stance).
+
+- **Styles**: `LegalityBanner{Pass,Fail}Style` / `LegalityBadge{Pass,Fail}Style`
+  / `LegalityBadgeLabel{Pass,Fail}Style` / `LegalityMessage{Pass,Fail}Style`
+  added to `Styles.xaml`, reusing the existing `StatusPassBg/Fg` and
+  `StatusFailBg/Fg` color tokens (defined in Task 1's `Colors.xaml` port but
+  unused until now).
+- **`PokemonDetailPage.RefreshLegality(PKM p)`** constructs a fresh
+  `LegalityAnalysis`, swaps the banner/badge/message `Style`s based on
+  `la.Valid` (pass=green/"LEGAL", fail=red/"ILLEGAL"), and sets the message
+  text to `la.Report()` - PKHeX.Core's own human-readable report string
+  (`"Legal!"` when valid; the same itemized invalid-check list PKHeX desktop
+  shows, when not). Called from `LoadPokemonCore` (every load) and again
+  after a successful save (species/move/stat edits change the result) -
+  **not** live per-keystroke, matching the existing hero/title refresh
+  cadence and keeping `LegalityAnalysis` (non-trivial cost - full encounter
+  matching) off the hot path of every field edit.
+
+### On-device verification (the task's specific ask: confirm it flags issues *introduced by* the species/move editor)
+
+Driven on `PkhexMobile_Emulator`, screenshots in `verify/UIReskin/screenshots/`
+(32-38):
+
+1. **Gen9, `gen9_real.sav`, Skeledirge (untouched)**: banner loads green
+   "LEGAL" / "Legal!" - confirms no false positives on a legitimately-obtained
+   real save mon.
+2. **Same mon, edited Species Skeledirge→Quaxwell via the restyled species
+   Picker, saved**: banner turned red "ILLEGAL" immediately after the save
+   completed, with a detailed itemized report - `Invalid Move 1-4: Invalid
+   Move` (Torch Song/Shadow Ball/Snarl/Hex aren't Quaxwell's moves),
+   `Unable to match an encounter from origin game`, `Ability is not valid
+   for species/form`, plus a dozen `Unexpected Technical Record Learned
+   flag` lines. Exactly the kind of issue-flagging the task asked to
+   confirm - a species/move edit's illegality is caught and explained, not
+   silently accepted.
+3. **Before the save**, the banner correctly stayed on the stale "LEGAL"
+   result while the Species picker showed the new selection - confirms the
+   snapshot-on-load/save cadence (not live-per-keystroke) behaves as
+   designed, not as a bug.
+4. **Gen1, `gen1_real.sav`, MEW**: banner loads red "ILLEGAL" / "Invalid:
+   Unable to match an encounter from origin game" - correct (this is a
+   hand-crafted test-save Mew, not a legitimately-obtained one) and, more
+   importantly, confirms `LegalityAnalysis` runs without crashing on Gen1's
+   substantially different parse path (VC-transfer treatment, GameBoy parse
+   format) - not just the Gen9 path exercised in steps 1-3.
+
+No regressions to any Task 1 functionality; this task only added the banner
+and its refresh calls.
+
+## Roadmap / not yet started (as of 2026-07-21, post-legality-badge)
+
 - **Box (PC) editing.** Still read-only via the structural null-`parentSave`
   guard; no box→party moves or slot swaps.
 - **Form/Nature/Ability editing.** Still not user-editable (Nature/Ability

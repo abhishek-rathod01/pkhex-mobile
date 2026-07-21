@@ -160,6 +160,7 @@ public partial class PokemonDetailPage : ContentPage
         PopulateMovePickers(p);
 
         PopulateHeldItem(p);
+        RefreshLegality(p);
 
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
@@ -196,6 +197,25 @@ public partial class PokemonDetailPage : ContentPage
         ItemIconBorder.IsVisible = hasItem;
         ItemSpriteImage.Source = hasItem ? SpriteHelper.ItemSpriteFile(p.HeldItem) : null;
         ItemNameLabel.Text = hasItem ? PkmDisplayHelper.GetItemName(p.HeldItem) : "None";
+    }
+
+    // Read-only legality snapshot (PKHeX.Core's own LegalityAnalysis, no changes made to it and no
+    // auto-fix applied anywhere). Recomputed here and again after a successful save, since species/
+    // move/stat edits change the result - never live per-keystroke, matching the existing
+    // hero/title refresh cadence.
+    private void RefreshLegality(PKM p)
+    {
+        var la = new LegalityAnalysis(p);
+        var suffix = la.Valid ? "Pass" : "Fail";
+        var resources = Application.Current!.Resources;
+
+        LegalityBanner.Style = (Style)resources[$"LegalityBanner{suffix}Style"];
+        LegalityBadgeBorder.Style = (Style)resources[$"LegalityBadge{suffix}Style"];
+        LegalityBadgeLabel.Style = (Style)resources[$"LegalityBadgeLabel{suffix}Style"];
+        LegalityMessageLabel.Style = (Style)resources[$"LegalityMessage{suffix}Style"];
+
+        LegalityBadgeLabel.Text = la.Valid ? "LEGAL" : "ILLEGAL";
+        LegalityMessageLabel.Text = la.Report();
     }
 
     private void PopulateSpeciesPicker(PKM p)
@@ -428,6 +448,7 @@ public partial class PokemonDetailPage : ContentPage
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
                 RefreshHero(pk);
                 PopulateHeldItem(pk);
+                RefreshLegality(pk);
 
                 // Design-notes.md Save button rule 3: return to disabled immediately after a
                 // successful save.
