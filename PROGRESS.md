@@ -944,3 +944,238 @@ regressions from this pass's template edits.
   coverage is vendored.
 - **Item icon gap.** ~65% of PKHeX item IDs (mostly TM/TR and minor items)
   have no matching pokesprite icon and show the placeholder.
+
+## Box/party move + swap, drag-and-drop + tap-to-select (2026-07-21)
+
+Enables moving Pokemon between box slots and party slots, in both
+directions, plus box-to-box moves - the first item on the previous
+session's roadmap. Two interaction methods, both wired into `BoxListPage`
+(chosen over `PartyListPage` as the host, since a move inherently needs
+box context - see "Scope decision" below): drag-and-drop and
+tap-to-select-then-tap-destination, gated behind a new "Move mode" switch
+so the pre-existing tap-to-view-detail browse behavior stays exactly as it
+was when the switch is off.
+
+### The write-path core: `PokemonSlotMover.cs`, proven before any UI touched it
+
+Per an advisor consult before writing UI code, the data-integrity-sensitive
+part (`PkhexMobile/PokemonSlotMover.cs`, a new file) was built and proven
+against real saves with `verify/BoxPartyMove/Program.cs` *first*, so the
+part with real corruption risk was already green before the grid UI
+existed. `SlotLocation` (also new) is a small tagged union (`IsParty` +
+either a party index or a box/slot pair) - deliberately a single type so
+neither the mover nor the UI can accidentally confuse a box index for a
+party index or vice versa (the exact hazard the pre-existing box read-only
+guard in `BoxListPage`/`PokemonDetailPage` was already written to avoid -
+see "PC box viewing, read-only" above).
+
+`PokemonSlotMover.MoveOrSwap(sav, from, to)` guards, all deliberate and
+tested:
+
+1. **Both endpoints are read into locals before any write.** A validation
+   failure (bad index, invalid empty-party-target) throws before anything
+   is mutated - no half-applied edit.
+2. **Party's no-gaps invariant is enforced, not assumed from the UI.** The
+   only valid *empty* party target is exactly index `PartyCount` (the
+   slot immediately after the current party) - checked inside the mover
+   itself. A move that vacates a party slot (moving a mon out to a box)
+   closes the gap via the existing `SaveFile.DeletePartySlot`, which
+   shifts everyone after that slot down by one - verified against a
+   *middle* slot removal (not just the trailing slot) to actually prove
+   the shift-down, not just a lucky no-op case.
+3. **Destination is written before source is cleared.** For a plain move
+   into an empty slot, if anything were to throw between the two steps
+   (very unlikely - these are synchronous in-memory byte writes with no
+   I/O), the worst case is a duplicate, never a silent loss. A **swap**
+   (destination occupied) has no such risk at all either way - both slots
+   stay occupied throughout, so there's never a transient empty/hole
+   state on either side, regardless of the party/box combination.
+4. **`ResetPartyStats()` is called explicitly and unconditionally on the
+   box-origin side of any move/swap that lands in a party slot** - never
+   left to `SaveFile.SetPartyValues`'s own `!PartyStatsPresent` auto-gate.
+   This mirrors the exact fix already applied in
+   `PokemonDetailPage.OnSaveChangesClicked` for the same class of bug
+   (see "Species + move editing" above), and the task's own working
+   theory turned out to be gen-dependent: **empirically confirmed via
+   the harness's `Stat_HPMax` dump** that a fresh `GetBoxSlotAtIndex` read
+   has `Stat_HPMax == 0` for Gen1 and Gen5 (matching the "box format
+   doesn't carry stat-block bytes" theory) but **`Stat_HPMax == 12`,
+   `PartyStatsPresent == true` for Gen9** (Scarlet's Sprigatito, box slot
+   0) - i.e. the theory does *not* hold for every generation, and relying
+   on the library's automatic gate instead of an explicit unconditional
+   call would have silently reintroduced the stale-stat-block bug for
+   Gen9 box→party moves specifically. Only fires box→party
+   (`!origin.IsParty && destination.IsParty`); a party→party reorder or
+   box→box move never calls it, since doing so unconditionally would
+   wrongly full-heal and clear status on a mon that already has valid
+   live battle state.
+5. **`EntityImportSettings.None` on every write**, matching the precedent
+   already set by `DeletePartySlot`'s own internal shifting calls - a
+   same-save relocation shouldn't re-trigger "as if traded" handler
+   conditioning, Pokedex updates, or record-acquired bookkeeping.
+
+### `verify/BoxPartyMove/Program.cs`
+
+Links `PokemonSlotMover.cs` directly via `<Compile Include>` (the actual
+production file, not a re-implementation that could drift), against real
+Gen1 (`POKEMON RED-0.sav`), Gen5 (`Pokemon Black Version.sav`), and Gen9
+(`pkmnscarlet_100\main`) saves. Covers every case the task called out:
+same-slot no-op (party and box), party→box move (vacating a *middle*
+slot, proving shift-down), box→party move (into the append slot), swaps
+specifically with destination occupied (party↔box and box↔box), and
+"last party member out" (see below). Field-for-field preservation is
+checked via an anonymous-type snapshot (species, PID, nickname, OT name,
+TID16, level, all 4 moves, all 6 IVs, all 6 EVs) compared before/after
+each operation - not just "a mon exists at the destination."
+
+Two design choices worth flagging for future harness authors:
+
+- **Box↔box swap and box→party move deliberately don't search the save
+  for a pre-existing second occupied box slot.** The real saves vary
+  wildly in box fullness (Gen1's `POKEMON RED-0.sav` has 235/240 box
+  slots occupied; Gen5's `Pokemon Black Version.sav` has almost nothing
+  stored outside the party) - a test that depends on "find another
+  occupied slot lying around" is a property of the specific save file,
+  not of `PokemonSlotMover`. Both tests self-seed a known, distinct
+  second slot via a move the harness itself performs first (e.g. moving
+  a party member into an empty box slot), so they're reliable regardless
+  of how full a given save's boxes are.
+- **"Last party member out" is deliberately allowed, not blocked** -
+  `PokemonSlotMover` has no PartyCount>0 guard, matching PKHeX.Core
+  itself (no such guard exists in `SaveFile`) and this project's own
+  save inventory, which already treats `PartyCount==0` as a legitimate
+  parsed state (`SAV3RSBox`, a GC box-storage-only file). The harness
+  drains the party to 0 and confirms `Write()` + `SaveUtil.GetSaveFile`
+  reload still succeeds. Gen1's real save doesn't have enough spare empty
+  box slots to fully drain a 6-member party (only ~5 empty slots existed
+  even before the harness's own earlier moves ate into them) - this is
+  correctly reported as a save-capacity note, not a failure, with the
+  *partially*-drained state's round-trip still verified instead.
+
+All three gens' full case list: `=== ALL CASES PASS ===`. Originals
+confirmed byte-for-byte untouched on disk after each run.
+
+### The grid UI: `BoxListPage`, `SlotCellDisplay`
+
+`BoxListPage` (previously a simple filtered `CollectionView` list, see
+"PC box viewing, read-only" above) is rewritten around two
+`GridItemsLayout` `CollectionView`s sharing one new display type,
+`SlotCellDisplay` (`Location`, `Source` PKM-or-null, `IsSelected`) -
+rebuilt and reassigned to `ItemsSource` after every change (matches the
+existing list-rebuild pattern already used by `LoadParty`/the old
+`LoadBox`, not a bound view-model with `INotifyPropertyChanged`):
+
+- **Party grid** (`Span="6"`) is always visible at the top of the page -
+  both ends of a party↔box move need to be on screen simultaneously for
+  drag-and-drop to be possible at all. Shows every populated slot plus
+  *exactly one* trailing empty cell when `PartyCount < 6` (never more) -
+  the single valid "append" target `PokemonSlotMover` accepts; rendering
+  further empty cells would offer drop targets the mover correctly
+  rejects as gap-creating, a confusing dead end rather than a real
+  option.
+- **Box grid** (`Span="5"`, scrollable) below a "BOX" picker card, same
+  as before - every slot rendered, empty or not, since boxes already
+  tolerate holes.
+- **Move mode switch.** Off (default): tapping a populated cell opens
+  `PokemonDetailPage`, exactly as before - box cells still navigate with
+  `PendingPokemonSave` left null (read-only guard, unchanged), party
+  cells now navigate read-write (`PendingPokemonSave = currentSave`,
+  `PendingPokemonIndex = cell.Location.Slot`), matching
+  `PartyListPage`'s existing behavior - this is a small **added**
+  capability (editing a party mon was previously only reachable via
+  `PartyListPage`, not `BoxListPage`), not a regression, and doesn't
+  weaken the read-only guarantee for box entries at all. On: tap
+  repurposed for tap-to-select-then-tap-destination (see below); drag is
+  always active regardless of the switch, since it's a distinct gesture
+  from a plain tap and doesn't collide with browse-mode taps.
+- **Tap-to-select fallback.** First tap on a populated cell selects it
+  (highlighted via a `DataTrigger` on `IsSelected`, new `SlotCellStyle` in
+  `Styles.xaml`) and shows "Selected. Tap a destination slot." Second tap
+  on a *different* cell calls `PokemonSlotMover.MoveOrSwap` and refreshes
+  both grids; second tap on the *same* cell cancels the selection
+  ("Selection cleared.") - verified on-device, both paths. Selection is a
+  `SlotLocation?` field, not tied to what's currently rendered, so
+  switching boxes via the picker mid-selection is deliberately allowed -
+  this is exactly how a box↔box move *between two different boxes* works
+  via the fallback: select in box A, switch the picker to box B, tap a
+  destination there. Verified on-device: selected a Gen9 box A slot,
+  switched the picker through Box 2 (open, tap "Box 2" in the dialog)
+  then again to Box 9 (a mis-tap landed there instead of the intended
+  Cancel button, but the pending selection survived it and completed the
+  move against Box 9 without any corruption or crash when the eventual
+  destination tap landed - a useful accidental stress test of exactly
+  this state-independent-of-rendering design).
+- **Drag-and-drop.** `DragGestureRecognizer`/`DropGestureRecognizer` on
+  every cell (`CanDrag="True"` on populated cells only -
+  `e.Cancel = true` for empty ones in `DragStarting`); `Drop` calls the
+  same `PerformMove` the tap fallback uses, so there is exactly one code
+  path that ever calls `PokemonSlotMover`. Compiles and runs without
+  crashing on-device.
+- **Explicit "Export Save" action, added mid-task after an advisor
+  review flagged the gap:** a move/swap only mutates the in-memory
+  `SaveFile` - unlike `PokemonDetailPage`'s edit flow, there's no
+  "Save Changes" button naturally in the way on this page. Added a
+  dirty/clean-tracked "Export Save" button (disabled until a move
+  actually succeeds, mirroring the existing Save-button pattern from the
+  reskin session) that calls `currentSave.Write()` +
+  `FileSaver.Default.SaveAsync`, identical in shape to
+  `PokemonDetailPage.OnSaveChangesClicked`'s export flow.
+
+### Two real bugs caught during on-device testing, both fixed before the pass was considered done
+
+1. **The gap above** (no export path existed at all from the grid UI) -
+   caught by re-reading the advisor's pre-UI-work notes rather than by
+   accidentally discovering it on-device; fixed by adding the Export Save
+   button described above, then verified end-to-end (see below).
+2. **ADB coordinate-scaling mistakes, not app bugs** - repeatedly tapped
+   using un-scaled "displayed" screenshot coordinates instead of the
+   1.2× raw-device coordinates the environment requires (see WAKEUP.md's
+   existing UI-automation note) or stale bounds after the page's layout
+   shifted once the Export Save button/status text changed height. Every
+   apparent "the tap did nothing" turned out to be exactly this, not the
+   app failing to respond - confirmed each time via `uiautomator dump`
+   before concluding a real defect. Logged here as a caution for
+   whoever automates this page next, not as an app-side finding.
+
+### On-device verification (`PkhexMobile_Emulator`, real FileSaver, real touch input)
+
+Driven against the real `gen9_real.sav` (screenshots in
+`verify/OnDeviceBoxPartyMove/screenshots/`):
+
+| Interaction | What was exercised | Result |
+|---|---|---|
+| Tap-to-select | Party slot↔box slot swap (destination occupied) | ✅ status "Moved.", PartyCount unchanged (6/6), both grids updated in place |
+| Tap-to-select | Box↔box swap within one box (destination occupied) | ✅ both slots exchanged contents |
+| Tap-to-select | Cross-box move: select in Box 1, switch picker (through an unintended extra box due to a mis-tap), complete on a different box | ✅ selection survived every picker change; move completed correctly with no corruption |
+| Tap-to-select | Same-slot tap cancels a pending selection | ✅ "Selection cleared.", highlight removed |
+| Move mode OFF | Tap a party cell opens the detail screen (pre-existing behavior) | ✅ correct mon (post-swap Sprigatito, Lv1) shown, Legal badge, all fields correct |
+| Drag-and-drop | Attempted via `adb shell input swipe` (two attempts, 1.2s and 2.5s duration) | Not triggered - ADB's synthetic swipe doesn't replicate the native long-press-drag gesture MAUI's Android renderer listens for (an environment/automation limitation flagged before attempting, and confirmed empirically) - no crash either time. **Library/code-level only for drag specifically**; every other interaction above (including the harder "primary path" per-task-instructions, tap-to-select) was verified with real on-device touch input. |
+| Export | "Export Save" button disabled→enabled after a move, real FileSaver document-picker dialog, saved to a distinct filename | ✅ "Saved to: /storage/emulated/0/Documents/boxparty_...sav" |
+| Export round-trip | Pulled the exported file, read back via a throwaway PKHeX.Core harness (deleted after use, per this project's established convention) | `PartyCount=6`, `Party[0]: Species=906 (Sprigatito) Level=1 Stat_HPMax=12`, `Box0[0]: Species=911 (Skeledirge) Level=100` - exactly the swapped values, confirming the on-device move round-tripped through the real export |
+| Gen1 regression | `gen1_real.sav` (Trainer ASH) - box/party grid renders correctly (sprites, 6/6 party, 20/20 box 1), one tap-to-select swap performed | ✅ no crash, status "Moved." |
+
+### Scope decision: hosted on `BoxListPage`, `PartyListPage` untouched
+
+`PartyListPage` (no box context, simple list) is left exactly as it was -
+a move fundamentally needs both a party view and a box view on screen
+(or reachable) at once, and `BoxListPage` already had box context plus,
+after this pass, a party section added to it. Building the move UI as a
+new page-with-both-grids inside `BoxListPage` rather than modifying
+`PartyListPage` at all keeps the pure-browse party list's existing,
+already-verified behavior completely unchanged and lowers regression
+risk - `PartyListPage.xaml[.cs]` has a zero-line diff for this task.
+
+### Explicitly out of scope / deferred
+
+- Drag-and-drop between two *different* boxes (would require both boxes
+  visible simultaneously - not attempted; the tap-to-select fallback
+  already covers this case, see above).
+- No legality re-validation triggered by a move specifically (the
+  existing legality badge only refreshes on `PokemonDetailPage`
+  load/save, unchanged - a moved mon's legality can be seen by opening
+  its detail screen with Move mode off).
+- Gen1 was smoke-tested (one swap, on-device, no crash) rather than
+  given the full multi-case sweep Gen9 got on-device - the *library*
+  harness already proves Gen1's write-path correctness exhaustively
+  (same test suite, same file, see above); the on-device pass exists to
+  catch UI-specific issues, and none were found.

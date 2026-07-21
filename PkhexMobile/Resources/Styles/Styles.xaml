@@ -257,6 +257,23 @@
         <Setter Property="Padding" Value="12" />
     </Style>
 
+    <!-- Box/party move grid cell (BoxListPage) - a square-ish tile for a single slot, empty or
+         populated. Selection highlight is applied via a DataTrigger on IsSelected, not a second
+         style, so a bound record's selection state can change without swapping styles. -->
+    <Style x:Key="SlotCellStyle" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceSunken}" />
+        <Setter Property="Stroke" Value="{StaticResource BorderSubtle}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="WidthRequest" Value="56" />
+        <Setter Property="HeightRequest" Value="56" />
+        <Setter Property="StrokeShape">
+            <Setter.Value>
+                <RoundRectangle CornerRadius="10" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="BoxView">
         <Setter Property="BackgroundColor" Value="{StaticResource BorderSubtle}" />
     </Style>

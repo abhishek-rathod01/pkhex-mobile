@@ -6,68 +6,113 @@
              x:DataType="local:BoxListPage"
              Title="Boxes">
 
-    <Grid RowDefinitions="Auto,Auto,*" Padding="16">
-        <Label Grid.Row="0" Text="Boxes" Style="{StaticResource ScreenTitleStyle}" Margin="0,4,0,10" />
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="16" RowSpacing="12">
+        <Label Grid.Row="0" Text="Boxes" Style="{StaticResource ScreenTitleStyle}" Margin="0,4,0,0" />
 
-        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12" Margin="0,0,0,12">
+        <!-- Move mode: OFF (default) preserves the pre-existing read-only browse behavior exactly
+             (tap a slot -> open the detail screen). ON repurposes tap for the select-then-tap-
+             destination move fallback, so the two gestures never collide. Drag-and-drop (below) is
+             always active regardless of this switch - it's a distinct gesture from a plain tap. -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12">
             <VerticalStackLayout Spacing="6">
-                <Label Text="Box" Style="{StaticResource LabelCaptionStyle}" />
-                <Picker x:Name="BoxPicker"
-                        Title="Select box"
-                        SelectedIndexChanged="OnBoxSelected" />
-                <Label x:Name="HeaderLabel" Style="{StaticResource MutedStyle}" />
+                <HorizontalStackLayout Spacing="10">
+                    <Switch x:Name="MoveModeSwitch" Toggled="OnMoveModeToggled" />
+                    <Label Text="Move mode (drag or tap-to-select a Pokemon, then tap its destination)"
+                           Style="{StaticResource BodySecondaryStyle}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label x:Name="StatusLabel" Style="{StaticResource MutedStyle}" />
+                <Button x:Name="ExportBtn" Text="Export Save" Style="{StaticResource SecondaryButtonStyle}"
+                        Clicked="OnExportClicked" IsEnabled="False" HorizontalOptions="Start" />
             </VerticalStackLayout>
         </Border>
 
-        <CollectionView x:Name="BoxList"
-                         Grid.Row="2"
-                         SelectionMode="Single"
-                         SelectionChanged="OnBoxEntrySelected">
-            <CollectionView.ItemsLayout>
-                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
-            </CollectionView.ItemsLayout>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="local:PartyEntryDisplay">
-                    <Border Style="{StaticResource RowBorderStyle}">
-                        <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="12">
-                            <Border Grid.Column="0" WidthRequest="52" HeightRequest="52"
-                                    Stroke="Transparent" StrokeThickness="0"
-                                    BackgroundColor="{StaticResource SurfaceSunken}">
-                                <Border.StrokeShape>
-                                    <RoundRectangle CornerRadius="12" />
-                                </Border.StrokeShape>
-                                <Grid>
-                                    <Image Source="sprite_placeholder.svg" Aspect="AspectFit"
-                                           WidthRequest="26" HeightRequest="26"
-                                           HorizontalOptions="Center" VerticalOptions="Center" />
-                                    <Image Source="{Binding SpriteFile}" Aspect="AspectFit"
-                                           WidthRequest="44" HeightRequest="44"
-                                           HorizontalOptions="Center" VerticalOptions="Center" />
+        <!-- Party: always visible so party<->box and party<->party moves have both ends on screen
+             at once. Shows every populated slot plus exactly one trailing empty "append" cell -
+             see BuildPartyCells for why only one. -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Padding="12">
+            <VerticalStackLayout Spacing="8">
+                <Label x:Name="PartyHeaderLabel" Text="Party" Style="{StaticResource SectionTitleStyle}" />
+                <CollectionView x:Name="PartyGrid" SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical" Span="6" HorizontalItemSpacing="6" VerticalItemSpacing="6" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="local:SlotCellDisplay">
+                            <Border Style="{StaticResource SlotCellStyle}">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnCellTapped" />
+                                    <DragGestureRecognizer CanDrag="True" DragStarting="OnCellDragStarting" />
+                                    <DropGestureRecognizer Drop="OnCellDrop" />
+                                </Border.GestureRecognizers>
+                                <Border.Triggers>
+                                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                        <Setter Property="Stroke" Value="{StaticResource Accent}" />
+                                        <Setter Property="BackgroundColor" Value="{StaticResource AccentSoft}" />
+                                    </DataTrigger>
+                                </Border.Triggers>
+                                <Grid RowDefinitions="Auto,Auto" VerticalOptions="Center">
+                                    <Image Grid.Row="0" Source="{Binding SpriteFile}" Aspect="AspectFit"
+                                           WidthRequest="34" HeightRequest="34" IsVisible="{Binding HasSprite}"
+                                           HorizontalOptions="Center" />
+                                    <Label Grid.Row="0" Text="{Binding SlotNumberText}" IsVisible="{Binding IsEmpty}"
+                                           Style="{StaticResource MonoMutedStyle}" HorizontalOptions="Center" VerticalOptions="Center" />
+                                    <Label Grid.Row="1" Text="{Binding LevelText}" Style="{StaticResource MonoMutedStyle}"
+                                           FontSize="{StaticResource Text2xs}" HorizontalOptions="Center" />
                                 </Grid>
                             </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Border>
 
-                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                                <HorizontalStackLayout Spacing="5">
-                                    <Label Text="{Binding Nickname}" Style="{StaticResource RowTitleStyle}" />
-                                    <Label Text="&#9733;" Style="{StaticResource ShinyStarStyle}" IsVisible="{Binding IsShiny}" />
-                                </HorizontalStackLayout>
-                                <Label Text="{Binding SpeciesName}" Style="{StaticResource MutedStyle}" />
-                            </VerticalStackLayout>
+        <!-- Box: picker + scrollable grid, all slots rendered (including empty ones - boxes are
+             already allowed to have holes, unlike party). -->
+        <Grid Grid.Row="3" RowDefinitions="Auto,*" RowSpacing="12">
+            <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="12">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Box" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="BoxPicker"
+                            Title="Select box"
+                            SelectedIndexChanged="OnBoxSelected" />
+                    <Label x:Name="BoxHeaderLabel" Style="{StaticResource MutedStyle}" />
+                </VerticalStackLayout>
+            </Border>
 
-                            <VerticalStackLayout Grid.Column="2" Spacing="4" HorizontalOptions="End" VerticalOptions="Center">
-                                <Label Text="{Binding Level, StringFormat='Lv {0}'}" Style="{StaticResource MonoValueStyle}"
-                                       HorizontalTextAlignment="End" />
-                                <Label Text="{Binding ItemFirstWord}" Style="{StaticResource MonoMutedStyle}"
-                                       IsVisible="{Binding HasItem}" HorizontalTextAlignment="End" />
-                                <Label Text="No item" Style="{StaticResource MonoMutedStyle}"
-                                       IsVisible="{Binding HasNoItem}"
-                                       HorizontalTextAlignment="End" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            <CollectionView x:Name="BoxGrid" Grid.Row="1" SelectionMode="None">
+                <CollectionView.ItemsLayout>
+                    <GridItemsLayout Orientation="Vertical" Span="5" HorizontalItemSpacing="6" VerticalItemSpacing="6" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="local:SlotCellDisplay">
+                        <Border Style="{StaticResource SlotCellStyle}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnCellTapped" />
+                                <DragGestureRecognizer CanDrag="True" DragStarting="OnCellDragStarting" />
+                                <DropGestureRecognizer Drop="OnCellDrop" />
+                            </Border.GestureRecognizers>
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="Stroke" Value="{StaticResource Accent}" />
+                                    <Setter Property="BackgroundColor" Value="{StaticResource AccentSoft}" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Grid RowDefinitions="Auto,Auto" VerticalOptions="Center">
+                                <Image Grid.Row="0" Source="{Binding SpriteFile}" Aspect="AspectFit"
+                                       WidthRequest="30" HeightRequest="30" IsVisible="{Binding HasSprite}"
+                                       HorizontalOptions="Center" />
+                                <Label Grid.Row="0" Text="{Binding SlotNumberText}" IsVisible="{Binding IsEmpty}"
+                                       Style="{StaticResource MonoMutedStyle}" FontSize="{StaticResource Text2xs}"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                                <Label Grid.Row="1" Text="{Binding LevelText}" Style="{StaticResource MonoMutedStyle}"
+                                       FontSize="{StaticResource Text2xs}" HorizontalOptions="Center" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
     </Grid>
 
 </ContentPage>

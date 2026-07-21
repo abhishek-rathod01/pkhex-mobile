@@ -139,9 +139,8 @@ instructed — nothing here touches that.
 
 ## What's next (not started, no blocker)
 
-- **Box editing** (moving/swapping slots between boxes/party) — explicitly
-  deferred every session so far, pending a design decision on the
-  interaction model.
+- ~~**Box editing** (moving/swapping slots between boxes/party)~~ — **done,
+  see "Box/party move + swap" below.**
 - **Form/Nature/Ability editing** — still read-only (PID-derived on several
   gens for Nature/Ability; Form has no per-species form list yet).
 - **Gen9 species sprite gap** — pokesprite has no Scarlet/Violet/Legends
@@ -151,3 +150,100 @@ instructed — nothing here touches that.
   have no matching pokesprite icon and show the placeholder.
 - The legality badge is read-only by design (task scope) — no "fix
   legality" action exists or was requested.
+- **Drag-and-drop between two different boxes** — not attempted; would
+  need both boxes visible simultaneously. The tap-to-select fallback
+  (select in box A, switch the picker, tap a destination in box B) already
+  covers this case — see below.
+
+## Box/party move + swap — completed (2026-07-21)
+
+Enabled moving Pokemon between box and party slots (both directions) plus
+box-to-box moves, via drag-and-drop and a tap-to-select-then-tap-destination
+fallback, both wired into `BoxListPage` (now shows a party grid + box grid
+together, gated behind a new "Move mode" switch so the pre-existing
+tap-to-view-detail browse behavior is unchanged when the switch is off).
+Full writeup, including the guard-by-guard reasoning for the write-path
+core and the on-device verification table, is in `PROGRESS.md`'s
+"Box/party move + swap" section (2026-07-21) — this is a pointer to it,
+not a duplicate.
+
+**Sequencing that paid off:** per an advisor consult before writing any
+XAML, the data-integrity-sensitive part (`PkhexMobile/PokemonSlotMover.cs`)
+was built and proven against real Gen1/5/9 saves
+(`verify/BoxPartyMove/Program.cs`, all cases pass) *before* any grid UI
+existed — so the part with real data-loss/duplication risk was already
+verified correct before the harder-to-verify UI layer was touched.
+
+**Genuine empirical finding, not assumed:** the task's own working theory
+("a box-sourced PKM should have `Stat_HPMax == 0`, so the library's
+existing `SetPartyValues` auto-gate should already handle box→party stat
+resets for free") was verified **false for Gen9** specifically — a fresh
+`GetBoxSlotAtIndex` read on the real `pkmnscarlet_100\main` save has
+`Stat_HPMax == 12`, `PartyStatsPresent == true` even before any write.
+Gen1 and Gen5 *do* match the theory (`Stat_HPMax == 0`). Good thing the
+mover was built to call `pk.ResetPartyStats()` explicitly and
+unconditionally on every box→party transition rather than trusting the
+auto-gate — relying on the theory alone would have silently reintroduced
+the exact stale-party-stat-block bug the "Species + move editing" session
+already found and fixed once, specifically for Gen9 box→party moves.
+
+**Gap caught and closed mid-task:** the grid UI initially had no way to
+export a move to disk at all (a move only mutates the in-memory `SaveFile`
+— unlike the per-mon edit form, there's no natural "Save Changes" button on
+a slot-move screen). Caught before declaring the task done, not by a user
+report; added a dirty/clean-tracked "Export Save" button to `BoxListPage`,
+verified on-device (real FileSaver dialog, then read back the exported
+file with a throwaway harness to confirm the on-device swap round-tripped
+correctly, deleted the harness after use).
+
+**On-device (`PkhexMobile_Emulator`) vs. library-only, the usual split:**
+tap-to-select — every variant (party↔box swap, box↔box swap, cross-box
+move with picker switching mid-selection, same-slot cancel, Move-mode-off
+browse regression, Export Save + real FileSaver + read-back) — was driven
+with real touch input on the emulator against `gen9_real.sav`, plus one
+Gen1 smoke swap against `gen1_real.sav` (no crash). **Drag-and-drop is
+wired identically in code** (`DragGestureRecognizer`/`DropGestureRecognizer`,
+same `PerformMove` call as the tap path) but **could not be triggered via
+`adb shell input swipe`** (two attempts, 1.2s and 2.5s duration, no crash
+either time, no move) — this is an ADB/automation limitation (synthetic
+swipes don't replicate the native long-press-drag gesture MAUI's Android
+renderer listens for), not evidence the drag code itself is wrong, but it
+means drag specifically is code-verified and manual-touch-verified-never
+in this pass — flagging honestly rather than claiming device coverage
+that wasn't actually exercised. A future session with a physical device
+or a slower manual test could close this gap; ADB alone can't.
+
+**Environment notes for next session (additions to the list above):**
+
+- **ADB tap coordinates from a Read-tool screenshot need the same 1.2×
+  scale-up as everywhere else** — several taps in this session initially
+  missed because a coordinate was read directly off the *displayed*
+  900×2000 screenshot without multiplying by the documented 1.2 factor to
+  get real 1080×2400 device coordinates. Symptom looks exactly like "the
+  app didn't respond to the tap"; always cross-check with
+  `adb shell uiautomator dump` + `bounds="[x1,y1][x2,y2]"` (those bounds
+  are already in real device coordinates, no scaling needed) before
+  concluding a UI defect from a screenshot-only read.
+- **A page's own layout can shift the coordinates of everything below
+  it between taps** — e.g. once `BoxListPage`'s status label or Export
+  button changed height/visibility, every grid cell below it moved. Prefer
+  re-dumping/re-screenshotting after any state change that could alter
+  content height, rather than reusing coordinates from an earlier
+  screenshot of the "same" page.
+- **`git status` showing commits you didn't make is expected, not an
+  error, when other agents share this working tree** — two unrelated
+  commits (a GitHub Actions CI workflow, additional vendored item icons)
+  landed on `master` mid-session from other concurrent agents, exactly as
+  this project's environment notes warned could happen. `git diff`/`git
+  log` confirmed no overlap with this task's files before committing;
+  worth the same check next time this happens rather than assuming it's
+  your own uncommitted work resurfacing.
+
+Delivered: `PkhexMobile/PokemonSlotMover.cs`, `SlotCellDisplay.cs`
+(new), `BoxListPage.xaml[.cs]` (rewritten), a `SlotCellStyle` addition to
+`Styles.xaml`, `verify/BoxPartyMove/` (kept — covers the write-path core,
+matches this project's convention of keeping harnesses that test
+production code directly via `<Compile Include>`), and
+`verify/OnDeviceBoxPartyMove/screenshots/` (53 screenshots). The one-off
+export-read-back harness used to confirm the on-device round-trip was
+deleted after use, matching the `OnDeviceEvFix` convention.
