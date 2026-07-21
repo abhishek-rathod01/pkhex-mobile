@@ -10,6 +10,8 @@ pk.CurrentLevel = 10;
 sav.PartyData = [pk];
 
 // PRIMARY, REQUIRED verification — read directly off the live object, no serialization needed.
+bool primaryOk = sav.OT == "VERIFY" && sav.PartyCount == 1 && sav.PartyData[0].Species == 25 && sav.PartyData[0].CurrentLevel == 10;
+
 Console.WriteLine($"Trainer: {sav.OT}");
 Console.WriteLine($"PartyCount: {sav.PartyCount}");
 for (int i = 0; i < sav.PartyCount; i++)
@@ -56,3 +58,5 @@ catch (Exception ex)
 
 Console.WriteLine();
 Console.WriteLine("Done.");
+
+return primaryOk ? 0 : 1;

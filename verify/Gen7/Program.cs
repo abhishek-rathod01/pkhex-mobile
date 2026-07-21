@@ -1,7 +1,7 @@
 using System;
 using PKHeX.Core;
 
-void Verify(string label, SaveFile sav)
+bool Verify(string label, SaveFile sav)
 {
     Console.WriteLine($"=== {label} ===");
     sav.OT = "VERIFY";
@@ -18,15 +18,16 @@ void Verify(string label, SaveFile sav)
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
     Console.WriteLine();
+    return sav.OT == "VERIFY" && sav.PartyCount == 1 && sav.PartyData[0].Species == 25 && sav.PartyData[0].CurrentLevel == 10;
 }
 
 // --- Primary verification: SM ---
 var sm = new SAV7SM();
-Verify("SAV7SM (Sun/Moon)", sm);
+bool smOk = Verify("SAV7SM (Sun/Moon)", sm);
 
 // --- Primary verification: USUM ---
 var usum = new SAV7USUM();
-Verify("SAV7USUM (Ultra Sun/Ultra Moon)", usum);
+bool usumOk = Verify("SAV7USUM (Ultra Sun/Ultra Moon)", usum);
 
 // --- Gen7 quirk check: Alolan form handling (species 19 Rattata, Form=1 = Alolan) ---
 Console.WriteLine("=== Gen7 quirk: Alolan form (Rattata, Form=1) ===");
@@ -63,3 +64,5 @@ catch (Exception ex)
 {
     Console.WriteLine($"Bonus round-trip FAILED: {ex.GetType().Name}: {ex.Message}");
 }
+
+return (smOk && usumOk) ? 0 : 1;

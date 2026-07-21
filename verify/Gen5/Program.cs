@@ -65,3 +65,5 @@ catch (Exception ex)
 
 Console.WriteLine();
 Console.WriteLine("=== Done ===");
+
+return primaryOk ? 0 : 1;

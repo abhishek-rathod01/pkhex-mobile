@@ -3,6 +3,8 @@ using PKHeX.Core;
 Console.WriteLine("=== Gen2 PKHeX.Core Verification ===");
 Console.WriteLine();
 
+bool primaryOk = false, secondaryOk1 = false, secondaryOk2 = false;
+
 // ---------------------------------------------------------------------
 // PRIMARY VERIFICATION: Crystal (GameVersion.C), English/International
 // This matches the SAV2() default constructor: SAV2(LanguageID.English, GameVersion.C)
@@ -29,9 +31,9 @@ Console.WriteLine("--- Primary: SAV2 (Crystal, English/International) ---");
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel} HeldItem={p.HeldItem}");
     }
 
-    bool ok = sav.OT == "VERIFY" && sav.PartyCount == 1
+    primaryOk = sav.OT == "VERIFY" && sav.PartyCount == 1
         && sav.PartyData[0].Species == 25 && sav.PartyData[0].CurrentLevel == 10;
-    Console.WriteLine(ok ? "PRIMARY CHECK: PASS" : "PRIMARY CHECK: FAIL");
+    Console.WriteLine(primaryOk ? "PRIMARY CHECK: PASS" : "PRIMARY CHECK: FAIL");
     Console.WriteLine();
 
     // ---------------------------------------------------------------------
@@ -85,9 +87,9 @@ Console.WriteLine("--- Secondary: SAV2 (Gold/Silver, English/International) ---"
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
 
-    bool ok = sav.OT == "GSVER" && sav.PartyCount == 1
+    secondaryOk1 = sav.OT == "GSVER" && sav.PartyCount == 1
         && sav.PartyData[0].Species == 152 && sav.PartyData[0].CurrentLevel == 5;
-    Console.WriteLine(ok ? "SECONDARY CHECK (GS): PASS" : "SECONDARY CHECK (GS): FAIL");
+    Console.WriteLine(secondaryOk1 ? "SECONDARY CHECK (GS): PASS" : "SECONDARY CHECK (GS): FAIL");
     Console.WriteLine();
 }
 
@@ -115,9 +117,11 @@ Console.WriteLine("--- Secondary: SAV2 (Crystal, Japanese) ---");
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
 
-    bool ok = sav.PartyCount == 1 && sav.PartyData[0].Species == 249 && sav.PartyData[0].CurrentLevel == 40;
-    Console.WriteLine(ok ? "SECONDARY CHECK (JP Crystal): PASS" : "SECONDARY CHECK (JP Crystal): FAIL");
+    secondaryOk2 = sav.PartyCount == 1 && sav.PartyData[0].Species == 249 && sav.PartyData[0].CurrentLevel == 40;
+    Console.WriteLine(secondaryOk2 ? "SECONDARY CHECK (JP Crystal): PASS" : "SECONDARY CHECK (JP Crystal): FAIL");
 }
 
 Console.WriteLine();
 Console.WriteLine("=== Done ===");
+
+return (primaryOk && secondaryOk1 && secondaryOk2) ? 0 : 1;

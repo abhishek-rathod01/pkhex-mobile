@@ -1,7 +1,7 @@
 using PKHeX.Core;
 
 Console.WriteLine("=== Gen4 SAV4DP (Diamond/Pearl) ===");
-RunCheck(() =>
+bool primaryOk = RunCheck(() =>
 {
     var sav = new SAV4DP();
     sav.OT = "VERIFY";
@@ -17,6 +17,8 @@ RunCheck(() =>
         var p = sav.PartyData[i];
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
+
+    return sav.OT == "VERIFY" && sav.PartyCount == 1 && sav.PartyData[0].Species == 25 && sav.PartyData[0].CurrentLevel == 10;
 });
 
 Console.WriteLine();
@@ -37,6 +39,7 @@ RunCheck(() =>
         var p = sav.PartyData[i];
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
+    return true; // bonus check, don't fail on this
 });
 
 Console.WriteLine();
@@ -57,6 +60,7 @@ RunCheck(() =>
         var p = sav.PartyData[i];
         Console.WriteLine($"  Species={p.Species} Level={p.CurrentLevel}");
     }
+    return true; // bonus check, don't fail on this
 });
 
 Console.WriteLine();
@@ -77,17 +81,21 @@ RunCheck(() =>
     Console.WriteLine(reloaded is null
         ? "SaveUtil.GetSaveFile(bytes) => null (NOT recognized) -- confirms known limitation"
         : $"SaveUtil.GetSaveFile(bytes) => recognized as {reloaded.GetType().Name} (unexpected! limitation may be resolved)");
+    return true; // bonus check, don't fail on this
 });
 
-static void RunCheck(Action action)
+return primaryOk ? 0 : 1;
+
+static bool RunCheck(Func<bool> action)
 {
     try
     {
-        action();
+        return action();
     }
     catch (Exception ex)
     {
         Console.WriteLine($"FAILED: {ex.GetType().Name}: {ex.Message}");
         Console.WriteLine(ex.StackTrace);
+        return false;
     }
 }

@@ -18,6 +18,9 @@ pk.Language = 2; // English
 sav.PartyData = [pk];
 
 // PRIMARY, REQUIRED verification -- read directly off the live object, no serialization needed.
+bool primaryOk = sav.OT == "VERIFY" && sav.TID16 == 12345 && sav.PartyCount == 1
+    && sav.PartyData[0].Species == 25 && sav.PartyData[0].CurrentLevel == 10;
+
 Console.WriteLine($"Trainer: {sav.OT}");
 Console.WriteLine($"TID16: {sav.TID16}");
 Console.WriteLine($"PartyCount: {sav.PartyCount}");
@@ -62,3 +65,5 @@ catch (Exception ex)
 {
     Console.WriteLine($"Bonus round-trip threw: {ex}");
 }
+
+return primaryOk ? 0 : 1;

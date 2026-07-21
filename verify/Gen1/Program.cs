@@ -139,3 +139,5 @@ catch (Exception ex)
 
 Console.WriteLine();
 Console.WriteLine("=== Done ===");
+
+return (primaryOk && secondOk) ? 0 : 1;

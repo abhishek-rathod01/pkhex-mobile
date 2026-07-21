@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
+
+    - name: Restore dependencies
+      run: dotnet restore vendor/PKHeX.Core
+
+    - name: Build PKHeX.Core
+      run: dotnet build vendor/PKHeX.Core -c Release --no-restore
+
+    # Run self-contained verification harnesses (no file dependencies).
+    # These harnesses construct library-generated test saves and verify basic
+    # parsing/manipulation correctness for each generation.
+    #
+    # Excluded from CI (file-dependent, require C:\Users\abhis\Downloads\sav files pkmn):
+    #  - verify/Inventory/Program.cs (requires directory argument, scans real save files)
+    #  - verify/EditRoundTrip/Program.cs (tests round-trip with real save files)
+    #  - verify/Gen12IvCap/Program.cs (tests against real Gen1/2 saves)
+    #  - verify/BoxInventory/Program.cs (scans real save boxes)
+    #  - verify/SpeciesMoveEdit/Program.cs (tests species/move edits on real saves)
+
+    - name: Verify Gen1 (Red/Blue/Yellow)
+      run: dotnet run --project verify/Gen1 -c Release
+
+    - name: Verify Gen2 (Gold/Silver/Crystal)
+      run: dotnet run --project verify/Gen2 -c Release
+
+    - name: Verify Gen3 (Ruby/Sapphire/Emerald)
+      run: dotnet run --project verify/Gen3 -c Release
+
+    - name: Verify Gen4 (Diamond/Pearl/Platinum/HGSS)
+      run: dotnet run --project verify/Gen4 -c Release
+
+    - name: Verify Gen5 (Black/White)
+      run: dotnet run --project verify/Gen5 -c Release
+
+    - name: Verify Gen6 (X/Y)
+      run: dotnet run --project verify/Gen6 -c Release
+
+    - name: Verify Gen7 (Sun/Moon/Ultra Sun/Ultra Moon)
+      run: dotnet run --project verify/Gen7 -c Release
+
+    - name: Verify Gen8 (Sword/Shield)
+      run: dotnet run --project verify/Gen8 -c Release
+
+    - name: Verify Gen9 (Scarlet/Violet/Legends Z-A)
+      run: dotnet run --project verify/Gen9 -c Release
