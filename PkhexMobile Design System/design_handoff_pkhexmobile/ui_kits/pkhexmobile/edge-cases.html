@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PkhexMobile — Edge Cases</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  html,body{margin:0}
+  body{background:var(--bg-app-elevated);font-family:var(--font-body);color:var(--text-primary);padding:28px}
+  h2{font:var(--fw-bold) 22px/1 var(--font-display);letter-spacing:-.02em;margin:0 0 4px}
+  .sub{font:var(--fw-medium) 13px/1.5 var(--font-body);color:var(--text-secondary);margin:0 0 16px;max-width:640px}
+  .rail{display:flex;gap:26px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}
+  .case{flex:0 0 auto}
+  .cap{font:var(--fw-bold) 11px/1.3 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0 0 3px}
+  .capd{font:var(--fw-medium) 12px/1.4 var(--font-body);color:var(--text-tertiary);margin:0 0 10px;width:390px}
+  .phone{width:390px;height:760px;background:var(--surface-card);border-radius:40px;box-shadow:var(--shadow-raised);border:1px solid var(--border-subtle);position:relative;overflow:hidden}
+  .screen{position:absolute;inset:0;border-radius:40px;overflow:hidden}
+  section{margin-bottom:40px}
+  .divide{height:1px;background:var(--border-default);margin:8px 0 34px}
+</style>
+</head><body>
+<h2>PkhexMobile — edge-case handling</h2>
+<p class="sub">How the party list and detail screens degrade for missing / generation-specific data. Live components — same code as the main kit, fed different save data.</p>
+
+<section>
+  <div class="cap">Party list</div>
+  <div class="rail" id="party-rail"></div>
+</section>
+<div class="divide"></div>
+<section>
+  <div class="cap">Detail screen</div>
+  <div class="rail" id="detail-rail"></div>
+</section>
+
+<script src="./data.js"></script>
+<script type="text/babel" src="./icons.jsx.txt"></script>
+<script type="text/babel" src="./chrome.jsx.txt"></script>
+<script type="text/babel" src="./PartyListScreen.jsx.txt"></script>
+<script type="text/babel" src="./DetailScreen.jsx.txt"></script>
+<script type="text/babel">
+// ---- edge-case data ----
+// Full 6-member party = the default kit data (Gengar has no nickname; mix of genders).
+const fullParty = window.PKX_PARTY;
+
+// Single-member party: a genderless Gen-1 Pokémon with no nickname and no held item.
+const soloParty = [
+  { id: 1, dex: 100, species: 'Voltorb', nick: null, level: 19, types: ['electric'], item: null, gender: null, shiny: false, legality: 'pass' },
+];
+
+// Gen-1 detail: Mewtwo — genderless, no held item / ability / nature (don't exist in Gen 1),
+// stat-EXP (0–65535) instead of EVs, IV cap 15, no SID, no met data.
+const gen1Detail = {
+  dex: 150, species: 'Mewtwo', nick: null, level: 70, types: ['psychic'],
+  gender: null, shiny: false, form: 'Normal', ability: null, item: null, nature: null,
+  legality: 'pass', gen: 1,
+  main: { ot: 'RED', tid: '31337', sid: null, friendship: 70, language: 'ENG', game: 'Blue' },
+  met: { location: null, date: null, ball: null, levelMet: null, egg: false },
+  stats: [
+    { stat: 'hp', label: 'HP', value: 226, iv: 15, ev: 63504 },
+    { stat: 'atk', label: 'ATK', value: 196, iv: 15, ev: 63504 },
+    { stat: 'def', label: 'DEF', value: 158, iv: 13, ev: 25600 },
+    { stat: 'spa', label: 'SPA', value: 268, iv: 15, ev: 65535 },
+    { stat: 'spd', label: 'SPD', value: 216, iv: 15, ev: 65535 },
+    { stat: 'spe', label: 'SPE', value: 240, iv: 15, ev: 65535 },
+  ],
+  ivMax: 15, evMax: 65535,
+  moves: [
+    { name: 'Psychic', type: 'psychic', pp: 10, ppMax: 10 },
+    { name: 'Recover', type: 'normal', pp: 20, ppMax: 20 },
+    { name: 'Amnesia', type: 'psychic', pp: 20, ppMax: 20 },
+    { name: 'Swift', type: 'normal', pp: 20, ppMax: 20 },
+  ],
+  ribbons: [],
+  memories: null,
+};
+
+function Phone({ children }) {
+  return <div className="phone"><div className="screen">{children}</div></div>;
+}
+function Case({ cap, desc, children }) {
+  return <div className="case"><div className="cap" style={{color:'var(--text-primary)'}}>{cap}</div><div className="capd">{desc}</div>{children}</div>;
+}
+
+// Detail screen has a sticky bottom bar positioned absolute → give it a relative host.
+function DetailHost({ detail }) {
+  return <div style={{position:'relative',height:'100%'}}><window.DetailScreen detail={detail} onBack={()=>{}} /></div>;
+}
+
+ReactDOM.createRoot(document.getElementById('party-rail')).render(<React.Fragment>
+  <Case cap="Full party (6/6)" desc="All slots filled. Slot 5 (Gengar) has no nickname → species shown as the primary line. Mixed genders + a fail badge.">
+    <Phone><window.PartyListScreen party={fullParty} onOpen={()=>{}} onNav={()=>{}} /></Phone>
+  </Case>
+  <Case cap="One member (1/6)" desc="Sparse save. The single row is a genderless Gen-1 Voltorb with no nickname and no held item → genderless mark + muted 'No item'. Add-slot affordance fills the space.">
+    <Phone><window.PartyListScreen party={soloParty} saveName="BLUE.sav" gameName="Blue" onOpen={()=>{}} onNav={()=>{}} /></Phone>
+  </Case>
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('detail-rail')).render(<React.Fragment>
+  <Case cap="Gen 9 (default)" desc="Full modern data — nickname, gender, ability, nature, held item, EVs (0–252), met location & date, SID.">
+    <Phone><DetailHost detail={window.PKX_DETAIL} /></Phone>
+  </Case>
+  <Case cap="Gen 1 · genderless" desc="Mewtwo. Nickname 'Not set → species'. Genderless mark. Ability & Nature read '— not in Gen 1'. Held item 'None'. Stats show Stat-EXP 0–65535 / IV 0–15. Met data 'Not recorded'. Trainer ID has no SID.">
+    <Phone><DetailHost detail={gen1Detail} /></Phone>
+  </Case>
+</React.Fragment>);
+</script>
+</body></html>

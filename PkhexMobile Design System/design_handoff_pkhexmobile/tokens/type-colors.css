@@ -1,0 +1,23 @@
+:root {
+  /* ===== Pokémon type palette — data-viz accents for type badges =====
+     Muted/desaturated from the classic type hues so they read as a modern
+     UI palette, not a fan skin. Each has a matching soft bg for chips. */
+  --type-normal: #9AA0A9;   --type-normal-bg: #EEEFF1;
+  --type-fire: #EE7B45;     --type-fire-bg: #FCEBE0;
+  --type-water: #4E90DA;    --type-water-bg: #E3EDF9;
+  --type-electric: #E8B32B; --type-electric-bg: #FBF1D2;
+  --type-grass: #5BB463;    --type-grass-bg: #E2F1E3;
+  --type-ice: #6FC7C4;      --type-ice-bg: #E1F3F2;
+  --type-fighting: #C0403C; --type-fighting-bg: #F6E0DF;
+  --type-poison: #9A5CB4;   --type-poison-bg: #EFE4F4;
+  --type-ground: #C9924A;   --type-ground-bg: #F5EBDC;
+  --type-flying: #8C9BE0;   --type-flying-bg: #E9ECF9;
+  --type-psychic: #E56E93;  --type-psychic-bg: #FBE5EC;
+  --type-bug: #9DB03C;      --type-bug-bg: #EEF1DC;
+  --type-rock: #B4A265;     --type-rock-bg: #F1EDDE;
+  --type-ghost: #6A5896;    --type-ghost-bg: #E5E1EF;
+  --type-dragon: #6247C4;   --type-dragon-bg: #E3DEF6;
+  --type-dark: #59535F;     --type-dark-bg: #E6E4E9;
+  --type-steel: #6E93A6;    --type-steel-bg: #E6EDF1;
+  --type-fairy: #E58BC7;    --type-fairy-bg: #FBE7F4;
+}

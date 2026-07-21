@@ -1,0 +1,308 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PkhexMobile — States &amp; Edge Cases</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+html,body{margin:0}
+body{background:var(--bg-app-elevated);font-family:var(--font-body);color:var(--text-primary);padding:32px 40px 80px}
+h1{font:var(--fw-bold) 28px/1 var(--font-display);letter-spacing:-.02em;margin:0 0 6px}
+h2{font:var(--fw-bold) 20px/1 var(--font-display);letter-spacing:-.01em;margin:0 0 4px}
+.lede{font:var(--fw-medium) 14px/1.5 var(--font-body);color:var(--text-secondary);margin:0 0 36px;max-width:760px}
+.groupcap{font:var(--fw-bold) 12px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+.groupdesc{font:var(--fw-medium) 13px/1.5 var(--font-body);color:var(--text-tertiary);margin:0 0 18px;max-width:680px}
+section{margin-bottom:48px}
+.hr{height:1px;background:var(--border-default);margin:0 0 48px}
+.matrix{display:grid;gap:14px;margin-bottom:10px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+.swatchcap{font:var(--fw-semibold) 11px/1.3 var(--font-body);color:var(--text-tertiary);text-align:center}
+.rowcap{font:var(--fw-bold) 12px/1 var(--font-body);color:var(--text-primary);text-transform:uppercase;letter-spacing:.04em;margin:20px 0 10px}
+.rail{display:flex;gap:26px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}
+.phone{width:360px;height:700px;background:var(--surface-card);border-radius:36px;box-shadow:var(--shadow-raised);border:1px solid var(--border-subtle);position:relative;overflow:hidden;flex:0 0 auto}
+.screen{position:absolute;inset:0;border-radius:36px;overflow:hidden}
+.cap{font:var(--fw-bold) 12px/1.3 var(--font-body);color:var(--text-primary);margin:0 0 4px}
+.capd{font:var(--fw-medium) 12px/1.4 var(--font-body);color:var(--text-tertiary);margin:0 0 10px;width:340px}
+.demo{background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:18px 20px}
+.livecap{font:var(--fw-semibold) 11px/1.3 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:12px}
+</style>
+</head><body>
+<h1>PkhexMobile — component states &amp; edge cases</h1>
+<p class="lede">Reference sheet for handoff: every interactive control's default / hover / pressed / disabled treatment, plus how the party list and detail screens degrade for missing or generation-specific data. Static swatches are colour-accurate to the live components; each grid ends with a live, interactive instance to confirm behaviour by hand.</p>
+
+<section id="buttons">
+<div class="groupcap">Interactive states — Button</div>
+<div class="groupdesc">4 variants × 4 states. Hover tints the fill/surface; pressed adds <code>scale(0.97)</code>; disabled drops to 50% opacity and blocks pointer events.</div>
+<div id="btn-matrix"></div>
+<div class="livecap">Live — hover &amp; click to confirm</div>
+<div class="demo" id="btn-live" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+</section>
+
+<section id="iconbuttons">
+<div class="groupcap">Interactive states — IconButton</div>
+<div class="groupdesc">3 variants × 4 states. Pressed scale is tighter (0.92) than Button since the hit target is smaller.</div>
+<div id="iconbtn-matrix"></div>
+<div class="livecap">Live — hover &amp; click to confirm</div>
+<div class="demo" id="iconbtn-live" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+</section>
+
+<section id="switch">
+<div class="groupcap">Interactive states — Switch</div>
+<div class="groupdesc">Off / On × enabled / disabled. Disabled keeps the last value's position but flattens to grey at 60% opacity — the state is still legible, just inert.</div>
+<div id="switch-matrix"></div>
+<div class="livecap">Live — click to toggle</div>
+<div class="demo" id="switch-live" style="display:flex;gap:24px;flex-wrap:wrap"></div>
+</section>
+
+<section id="save">
+<div class="groupcap">Save button — disabled-when-clean / enabled-when-dirty</div>
+<div class="groupdesc">The primary Save action (bottom action bar, section edit sheets) is disabled the instant a screen loads with no unsaved changes, and enables the moment any field is edited. This prevents accidental no-op writes to the save file. Toggle the switch below to simulate an edit.</div>
+<div class="demo" id="save-demo"></div>
+</section>
+
+<div class="hr"></div>
+
+<section id="rowstates">
+<div class="groupcap">Interactive states — party row &amp; collapsible section</div>
+<div class="groupdesc">Rows and section headers use a subtle sunken-tint + scale press instead of a hover fill, so the list reads calmly while still confirming touch.</div>
+<div class="rail" id="rowstates-rail" style="align-items:stretch"></div>
+</section>
+
+<div class="hr"></div>
+
+<section id="helditem">
+<div class="groupcap">Held-item display</div>
+<div class="groupdesc">Two contexts render the held item differently: the party row shows a compact inline Bag icon + first word of the item name (space-constrained); the detail screen's Main card shows the full name in a Chip. Both share the same muted "no item" treatment when empty.</div>
+<div id="helditem-demo"></div>
+</section>
+
+<div class="hr"></div>
+
+<section id="edgecases">
+<div class="groupcap">Empty &amp; generation edge cases</div>
+<div class="groupdesc">Same components and screens, fed sparse or old-generation save data.</div>
+<div class="rail" id="party-rail"></div>
+<div class="rail" id="detail-rail" style="margin-top:8px"></div>
+</section>
+
+<script src="./data.js"></script>
+<script type="text/babel" src="./icons.jsx.txt"></script>
+<script type="text/babel" src="./chrome.jsx.txt"></script>
+<script type="text/babel" src="./PartyListScreen.jsx.txt"></script>
+<script type="text/babel" src="./DetailScreen.jsx.txt"></script>
+<script type="text/babel">
+const { Button, IconButton, Switch, Card, SectionHeader, DataRow, Chip, SpriteSlot, TypeBadge } = window.PkhexMobileDesignSystem_375f82;
+const I = window.PKXIcons;
+
+/* ---- static state-accurate swatch helpers (mirror component internals without needing real hover/press) ---- */
+function btnPalette(variant, hover) {
+  switch (variant) {
+    case 'secondary': return { bg: hover ? 'var(--slate-100)' : 'var(--surface-card)', fg: 'var(--text-primary)', border: '1px solid var(--border-default)' };
+    case 'ghost': return { bg: hover ? 'var(--slate-100)' : 'transparent', fg: 'var(--text-secondary)', border: '1px solid transparent' };
+    case 'danger': return { bg: hover ? 'var(--accent-active)' : 'var(--accent)', fg: 'var(--text-on-accent)', border: '1px solid transparent' };
+    default: return { bg: hover ? 'var(--accent-hover)' : 'var(--accent)', fg: 'var(--text-on-accent)', border: '1px solid transparent' };
+  }
+}
+function StaticButton({ variant, state, children }) {
+  const hover = state === 'hover';
+  const pressed = state === 'pressed';
+  const disabled = state === 'disabled';
+  const p = btnPalette(variant, hover && !disabled);
+  return <div style={{
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 44, padding: '0 18px', font: 'var(--fw-semibold) var(--text-base)/1 var(--font-body)',
+    color: p.fg, background: p.bg, border: p.border, borderRadius: 'var(--radius-control)',
+    opacity: disabled ? 0.5 : 1, transform: pressed && !disabled ? 'scale(0.97)' : 'scale(1)',
+    boxShadow: (variant === 'primary' || variant === 'danger') ? 'var(--shadow-xs)' : 'none', whiteSpace: 'nowrap',
+  }}>{children}</div>;
+}
+function StaticIconButton({ variant, state }) {
+  const hover = state === 'hover', pressed = state === 'pressed', disabled = state === 'disabled';
+  const filled = variant === 'primary';
+  const bg = filled ? (hover && !disabled ? 'var(--accent-hover)' : 'var(--accent)')
+    : (hover && !disabled ? 'var(--slate-100)' : (variant === 'outline' ? 'var(--surface-card)' : 'transparent'));
+  return <div style={{
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
+    color: filled ? 'var(--text-on-accent)' : 'var(--text-secondary)', background: bg,
+    border: variant === 'outline' ? '1px solid var(--border-default)' : '1px solid transparent',
+    borderRadius: 'var(--radius-control)', opacity: disabled ? 0.5 : 1,
+    transform: pressed && !disabled ? 'scale(0.92)' : 'scale(1)',
+  }}><I.Pencil size={18} /></div>;
+}
+function StaticSwitch({ checked, disabled }) {
+  const track = checked ? 'var(--accent)' : 'var(--slate-300)';
+  return <div style={{ position: 'relative', width: 46, height: 28, borderRadius: 'var(--radius-pill)', background: disabled ? 'var(--slate-200)' : track, opacity: disabled ? 0.6 : 1 }}>
+    <span style={{ position: 'absolute', top: 3, left: checked ? 21 : 3, width: 22, height: 22, background: 'var(--slate-0)', borderRadius: '50%', boxShadow: 'var(--shadow-sm)' }} />
+  </div>;
+}
+function Cell({ cap, children }) { return <div className="cell"><div>{children}</div><div className="swatchcap">{cap}</div></div>; }
+
+const STATES = ['default', 'hover', 'pressed', 'disabled'];
+const BTN_VARIANTS = ['primary', 'secondary', 'ghost', 'danger'];
+const ICONBTN_VARIANTS = ['primary', 'outline', 'ghost'];
+
+ReactDOM.createRoot(document.getElementById('btn-matrix')).render(<React.Fragment>
+  {BTN_VARIANTS.map((v) => <React.Fragment key={v}>
+    <div className="rowcap">{v}</div>
+    <div className="matrix" style={{ gridTemplateColumns: 'repeat(4,140px)' }}>
+      {STATES.map((s) => <Cell key={s} cap={s}><StaticButton variant={v} state={s}>Verify</StaticButton></Cell>)}
+    </div>
+  </React.Fragment>)}
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('btn-live')).render(<React.Fragment>
+  <Button variant="primary">Primary</Button><Button variant="secondary">Secondary</Button>
+  <Button variant="ghost">Ghost</Button><Button variant="danger">Danger</Button>
+  <Button variant="primary" disabled>Disabled</Button>
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('iconbtn-matrix')).render(<React.Fragment>
+  {ICONBTN_VARIANTS.map((v) => <React.Fragment key={v}>
+    <div className="rowcap">{v}</div>
+    <div className="matrix" style={{ gridTemplateColumns: 'repeat(4,80px)' }}>
+      {STATES.map((s) => <Cell key={s} cap={s}><StaticIconButton variant={v} state={s} /></Cell>)}
+    </div>
+  </React.Fragment>)}
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('iconbtn-live')).render(<React.Fragment>
+  <IconButton variant="primary" label="Edit"><I.Pencil size={18} /></IconButton>
+  <IconButton variant="outline" label="Search"><I.Search size={18} /></IconButton>
+  <IconButton variant="ghost" label="More"><I.More size={18} /></IconButton>
+  <IconButton variant="outline" label="Disabled" disabled><I.Pencil size={18} /></IconButton>
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('switch-matrix')).render(
+  <div className="matrix" style={{ gridTemplateColumns: 'repeat(4,80px)' }}>
+    <Cell cap="off"><StaticSwitch checked={false} /></Cell>
+    <Cell cap="on"><StaticSwitch checked={true} /></Cell>
+    <Cell cap="disabled · off"><StaticSwitch checked={false} disabled /></Cell>
+    <Cell cap="disabled · on"><StaticSwitch checked={true} disabled /></Cell>
+  </div>
+);
+
+function SwitchLive() {
+  const [on, setOn] = React.useState(true);
+  return <React.Fragment>
+    <Switch checked={on} onChange={setOn} label="Show shiny only" />
+    <Switch checked={false} disabled label="Locked (disabled)" />
+  </React.Fragment>;
+}
+ReactDOM.createRoot(document.getElementById('switch-live')).render(<SwitchLive />);
+
+function SaveDemo() {
+  const [dirty, setDirty] = React.useState(false);
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+    <Switch checked={dirty} onChange={setDirty} label="Simulate an edited field" />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <Button disabled={!dirty}>Save changes</Button>
+      <span style={{ font: 'var(--fw-medium) 12px/1.3 var(--font-body)', color: 'var(--text-tertiary)', maxWidth: 220 }}>
+        {dirty ? 'Dirty — Save is enabled.' : 'Clean — Save is disabled; nothing to write.'}
+      </span>
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('save-demo')).render(<SaveDemo />);
+
+/* ---- party row / section header press states ---- */
+function StaticPartyRow({ pressed }) {
+  const m = window.PKX_PARTY[0];
+  return <div style={{
+    display: 'flex', alignItems: 'center', gap: 12, width: 320, padding: 12,
+    background: pressed ? 'var(--surface-sunken)' : 'var(--surface-card)',
+    border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)',
+    boxShadow: 'var(--shadow-card)', transform: pressed ? 'scale(0.99)' : 'scale(1)',
+  }}>
+    <SpriteSlot size="md" shiny={m.shiny} />
+    <div style={{ flex: 1 }}>
+      <div style={{ font: 'var(--fw-bold) 16px/1.1 var(--font-display)', color: 'var(--text-primary)' }}>{m.nick}</div>
+      <div style={{ display: 'flex', gap: 5, marginTop: 5 }}>{m.types.map((t) => <TypeBadge key={t} type={t} size="sm" />)}</div>
+    </div>
+  </div>;
+}
+function SectionDemo() {
+  const [open, setOpen] = React.useState(true);
+  return <Card elevated style={{ padding: '14px 16px', width: 320 }}>
+    <SectionHeader title="Main" icon={<I.User size={15} />} collapsible open={open} onToggle={() => setOpen(!open)} />
+    <div style={{ maxHeight: open ? 200 : 0, overflow: 'hidden', transition: 'max-height var(--dur-slow) var(--ease-standard)' }}>
+      <div style={{ paddingTop: 8 }}><DataRow label="Level" value="76" mono /><DataRow label="Nature" value="Modest" divider={false} /></div>
+    </div>
+  </Card>;
+}
+ReactDOM.createRoot(document.getElementById('rowstates-rail')).render(<React.Fragment>
+  <div><div className="cap">Row · default</div><div className="capd">Rest state — white card, hairline border.</div><StaticPartyRow pressed={false} /></div>
+  <div><div className="cap">Row · pressed</div><div className="capd">Tap-down: sunken-surface tint + scale(0.99), 120ms.</div><StaticPartyRow pressed={true} /></div>
+  <div><div className="cap">Section header · live</div><div className="capd">Click the row to collapse/expand — chevron rotates 180°, content height animates 320ms.</div><SectionDemo /></div>
+</React.Fragment>);
+
+/* ---- held item display ---- */
+function HeldItemDemo() {
+  return <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+    <div>
+      <div className="cap">Party row — holding</div>
+      <div className="capd">Compact inline Bag glyph + first word only (space-constrained row).</div>
+      <div className="demo" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)', font: 'var(--fw-semibold) 11px/1 var(--font-body)' }}>
+        <I.Bag size={13} />Charcoal
+      </div>
+    </div>
+    <div>
+      <div className="cap">Party row — empty</div>
+      <div className="capd">No icon at all when there's nothing to hold — avoids implying an item exists.</div>
+      <div className="demo" style={{ display: 'inline-flex', color: 'var(--slate-300)', font: 'var(--fw-medium) 11px/1 var(--font-body)' }}>No item</div>
+    </div>
+    <div>
+      <div className="cap">Detail screen — holding</div>
+      <div className="capd">Main card's Held item row: full name in a Chip with Bag icon.</div>
+      <div className="demo"><DataRow label="Held item" value={<Chip icon={<I.Bag size={13} />}>Charcoal</Chip>} divider={false} /></div>
+    </div>
+    <div>
+      <div className="cap">Detail screen — empty</div>
+      <div className="capd">Muted "None" text, no Chip — Chip only appears once there's a value to contain.</div>
+      <div className="demo"><DataRow label="Held item" value={<span style={{ color: 'var(--text-tertiary)', fontWeight: 'var(--fw-medium)' }}>None</span>} divider={false} /></div>
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('helditem-demo')).render(<HeldItemDemo />);
+
+/* ---- edge-case data ---- */
+const fullParty = window.PKX_PARTY;
+const soloParty = [{ id: 1, dex: 100, species: 'Voltorb', nick: null, level: 19, types: ['electric'], item: null, gender: null, shiny: false, legality: 'pass' }];
+const gen1Detail = {
+  dex: 150, species: 'Mewtwo', nick: null, level: 70, types: ['psychic'],
+  gender: null, shiny: false, form: 'Normal', ability: null, item: null, nature: null,
+  legality: 'pass', gen: 1,
+  main: { ot: 'RED', tid: '31337', sid: null, friendship: 70, language: 'ENG', game: 'Blue' },
+  met: { location: null, date: null, ball: null, levelMet: null, egg: false },
+  stats: [
+    { stat: 'hp', label: 'HP', value: 226, iv: 15, ev: 63504 }, { stat: 'atk', label: 'ATK', value: 196, iv: 15, ev: 63504 },
+    { stat: 'def', label: 'DEF', value: 158, iv: 13, ev: 25600 }, { stat: 'spa', label: 'SPA', value: 268, iv: 15, ev: 65535 },
+    { stat: 'spd', label: 'SPD', value: 216, iv: 15, ev: 65535 }, { stat: 'spe', label: 'SPE', value: 240, iv: 15, ev: 65535 },
+  ],
+  ivMax: 15, evMax: 65535,
+  moves: [{ name: 'Psychic', type: 'psychic', pp: 10, ppMax: 10 }, { name: 'Recover', type: 'normal', pp: 20, ppMax: 20 }, { name: 'Amnesia', type: 'psychic', pp: 20, ppMax: 20 }, { name: 'Swift', type: 'normal', pp: 20, ppMax: 20 }],
+  ribbons: [], memories: null,
+};
+function Phone({ children }) { return <div className="phone"><div className="screen">{children}</div></div>; }
+function Case({ cap, desc, children }) { return <div className="case" style={{ flex: '0 0 auto' }}><div className="cap">{cap}</div><div className="capd">{desc}</div>{children}</div>; }
+function DetailHost({ detail }) { return <div style={{ position: 'relative', height: '100%' }}><window.DetailScreen detail={detail} onBack={() => {}} /></div>; }
+
+ReactDOM.createRoot(document.getElementById('party-rail')).render(<React.Fragment>
+  <Case cap="Full party (6/6)" desc="All slots filled. Gengar has no nickname → species shown as the primary line. Mixed genders + a fail badge.">
+    <Phone><window.PartyListScreen party={fullParty} onOpen={() => {}} onNav={() => {}} /></Phone>
+  </Case>
+  <Case cap="One member (1/6)" desc="Genderless Gen-1 Voltorb, no nickname, no held item. Add-slot affordance fills the remaining space.">
+    <Phone><window.PartyListScreen party={soloParty} saveName="BLUE.sav" gameName="Blue" onOpen={() => {}} onNav={() => {}} /></Phone>
+  </Case>
+</React.Fragment>);
+
+ReactDOM.createRoot(document.getElementById('detail-rail')).render(<React.Fragment>
+  <Case cap="Gen 9 (default)" desc="Full modern data — nickname, gender, ability, nature, held item, EVs 0–252, met location & date, SID.">
+    <Phone><DetailHost detail={window.PKX_DETAIL} /></Phone>
+  </Case>
+  <Case cap="Gen 1 · genderless" desc="Mewtwo. No nickname, genderless, no ability/nature/item (pre-Gen-2 fields). Stat-EXP 0–65535 / IV 0–15. Met data & SID not recorded.">
+    <Phone><DetailHost detail={gen1Detail} /></Phone>
+  </Case>
+</React.Fragment>);
+</script>
+</body></html>

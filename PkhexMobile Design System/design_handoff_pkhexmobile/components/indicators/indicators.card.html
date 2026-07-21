@@ -1,0 +1,23 @@
+<!-- @dsCard group="Components" viewport="700x250" name="Indicators" subtitle="Type, legality, status badges and meta chips" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;font-family:var(--font-body);background:var(--bg-app);color:var(--text-primary)}#root{padding:20px}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}.lbl{font:var(--fw-bold) 10px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);width:64px}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { TypeBadge, LegalityBadge, Badge, Chip } = window.PkhexMobileDesignSystem_375f82;
+const types=['fire','water','grass','electric','psychic','dragon','ghost','fairy','steel','flying'];
+function Demo(){
+  return (<div>
+    <div className="row"><span className="lbl">Types</span>{types.map(t=><TypeBadge key={t} type={t}/>)}</div>
+    <div className="row"><span className="lbl">Solid</span><TypeBadge type="fire" solid/><TypeBadge type="water" solid/><TypeBadge type="dragon" solid/><TypeBadge type="fairy" solid/></div>
+    <div className="row"><span className="lbl">Legality</span><LegalityBadge status="pass"/><LegalityBadge status="warn"/><LegalityBadge status="fail" count={3}/></div>
+    <div className="row"><span className="lbl">Status</span><Badge tone="info">Lv 100</Badge><Badge tone="shiny">Shiny</Badge><Badge tone="neutral">Egg</Badge><Badge tone="pass">Gen 9</Badge></div>
+    <div className="row"><span className="lbl">Chips</span><Chip>Leftovers</Chip><Chip>Cherish Ball</Chip><Chip tone="accent">Adamant</Chip><Chip onRemove={()=>{}}>Ribbon ×12</Chip></div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

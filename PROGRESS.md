@@ -655,30 +655,189 @@ form). Nature/Ability remain read-only. Box (PC) mons stay read-only via the
 existing null-`parentSave` guard (no Save button); the pickers render but
 can't persist there, matching the existing nickname/IV/EV behavior.
 
-## Roadmap / not yet started (as of 2026-07-21)
+## UI reskin: design system, sprites, held items, app icon (2026-07-21)
 
-Functionally the app now does: file-picker load → save detection → party
-list → PC box list (read-only) → detail screen with editable
-nickname/level/species/moves/IVs/EVs → export via FileSaver. Everything is
-verified across Gen 1/5/9 (see the sections above and `verify/`).
+Full visual reskin of every screen (MainPage, PartyListPage, BoxListPage,
+PokemonDetailPage) against a separately-authored design-handoff bundle at
+`PkhexMobile Design System/design_handoff_pkhexmobile/` (tokens as CSS custom
+properties + component/screen references as HTML/React prototypes - reference
+only, not copied into the app). Explicitly **reskin + button wiring**, no
+data-logic changes: every field, edit path, validation rule, and save/export
+flow documented in the sections above is untouched and re-verified working
+(see "On-device regression verification" below).
 
-What has **not** been started yet - all UI/presentation polish, none of it
-touches the save-parsing or editing correctness already verified:
+### Scope decision: direct-edit form kept, not the mockup's read-only-inspector paradigm
 
-- **Design system integration.** The app still ships the stock .NET MAUI
-  template chrome: the `MainPage` "Hello, World! / Welcome to .NET
-  Multi-platform App UI" home page with the submarine image and "Click me"
-  button, the default `Colors.xaml`/`Styles.xaml` palette, and the default
-  splash. No app-specific visual language (typography scale, spacing, color
-  tokens, component styles) has been applied to the party/box/detail screens.
-- **Sprite integration.** Every list and the detail screen are text-only
-  today (species name / nickname / level as labels). No Pokémon box sprites,
-  item icons, or type badges are rendered anywhere. `PkmDisplayHelper`
-  resolves names via `GameInfo.Strings`; there is no sprite-resolution path
-  yet, and no sprite image assets are bundled (`Resources/Images` holds only
-  the template `dotnet_bot.png`).
-- **App icon.** `Resources/AppIcon/appicon.svg` + `appiconfg.svg` are still
-  the default MAUI icon; no custom PkhexMobile icon has been authored.
+The design bundle's `DetailScreen.jsx` reference is a **read-only** inspector
+(`DataRow`s) with reserved pencil-icon "Edit" affordances and a bottom
+"Edit Pokémon" button, plus a `LegalityBadge`/Verify-button engine - all
+explicitly marked "not yet designed" in the bundle's own README (no wired
+logic behind any of it). The app's actual edit surface is the opposite:
+direct inline `Entry`/`Picker` editing with no separate edit-mode. Adopting
+the mockup's paradigm would have meant *removing* working, already-verified
+editing controls to match an unwired prototype - contrary to "preserve all
+existing functionality exactly." Resolution: kept the direct-edit form,
+applied the design system's visual language (cards, type scale, color/
+spacing/radius/shadow tokens, motion) to it, and did **not** build the
+mockup's read-only inspector, `LegalityBadge`/Verify engine, Add-Pokémon/
+Add-move affordances, or per-row legality dot - all of those are inert
+non-functionality that the task's "confirm actual bound behavior, don't just
+restyle" instruction rules out shipping. The one genuinely new *behavior*
+(not just visual) added: dirty/clean Save button tracking (below).
 
-These are the obvious next items for a UI pass. None is blocked; they are
-just not yet begun.
+### Design tokens → MAUI resources
+
+- `Resources/Styles/Colors.xaml` - full color token port (neutrals, brand
+  red, semantic/status, shiny, stat accents, 18-type palette) as MAUI
+  `Color`/`SolidColorBrush` resources.
+- `Resources/Styles/Tokens.xaml` (new file) - spacing scale, radii, type
+  scale, line heights, motion durations, and a `Shadow` elevation ramp
+  (`Border.Shadow` resources) - the non-color tokens that don't belong in
+  `Colors.xaml`.
+- `Resources/Styles/Styles.xaml` - rewritten: text-role styles
+  (`ScreenTitleStyle`, `SectionTitleStyle`, `RowTitleStyle`, `HeroTitleStyle`,
+  `BodyStyle`, `LabelCaptionStyle`, `MonoValueStyle`, etc.) mapped to the
+  design's semantic type roles; `Button` variants (`PrimaryButtonStyle`/
+  `SecondaryButtonStyle`/`GhostButtonStyle`/`DangerButtonStyle`) matching
+  `components/controls/Button.jsx`'s 4-variant spec including the `Disabled`
+  VisualState (`Opacity=0.5`); a `CardBorderStyle`/`RowBorderStyle` for the
+  card/row surface language; `Entry`/`Picker`/`Switch`/`Page`/`Shell` base
+  styles. Design system documents a single **light** palette only - no dark
+  theme tokens were provided, so no `AppThemeBinding` dark branch exists;
+  this is a scope observation, not an oversight.
+- **Fonts**: the design specifies Space Grotesk (display), Manrope (body),
+  JetBrains Mono (numeric/mono) from Google Fonts, at several named weights.
+  Google Fonts' current `google/fonts` GitHub repo only ships **variable**
+  fonts for these three families (no static per-weight files) - used
+  `fonttools`' `varLib.instancer` to generate 12 static-weight `.ttf`
+  instances (SpaceGrotesk Medium/SemiBold/Bold; Manrope Regular/Medium/
+  SemiBold/Bold/ExtraBold; JetBrainsMono Regular/Medium/SemiBold/Bold) under
+  `Resources/Fonts/`, each registered with its own alias in
+  `MauiProgram.ConfigureFonts`. The stock `OpenSans-Regular/Semibold.ttf`
+  template fonts were removed (unused once every style switched to the new
+  families).
+- **Motion**: `PressScaleBehavior.cs` (new) - a `Behavior<Button>` wired via
+  `BaseButtonStyle.Behaviors` that plays the design's press feedback
+  (`scale(0.97)` over 120ms, `Easing.CubicOut`) on every button via
+  `Button.Pressed`/`Released`, matching `--dur-fast`/no-bounce motion spec.
+
+### Save button: dirty/clean tracking (the one new *behavior*, not just style)
+
+`PokemonDetailPage` previously left `SaveChangesBtn` always enabled. Per
+design-notes.md's Save button spec (disabled clean → enabled on first edit →
+disabled again after a successful save), added `isDirty`/`isLoading` fields:
+every editable control (`NicknameEntry`/`LevelEntry`.`TextChanged`,
+`SpeciesPicker`/`Move1-4Picker`.`SelectedIndexChanged`, plus the existing
+IV/EV `TextChanged` handlers) now calls `MarkDirty()`, which is a no-op while
+`isLoading` is true (guards against `LoadPokemon`'s own programmatic field
+population being misread as a user edit). `OnSaveChangesClicked`'s success
+branch resets `isDirty = false`. Verified on-device across Gen1/5/9 (see
+below): button loads visibly faded/disabled on a fresh load, turns
+full-opacity/enabled the instant any field changes (including a same-value
+IV re-type, matching the design's "track edits, not value-diffs" spec), and
+fades back to disabled immediately after a successful save.
+
+### Sprites and held-item icons
+
+- **Species sprites**: regular + shiny icons for National Dex #1-905,
+  vendored from `msikma/pokesprite` into `Resources/Images/species/` as
+  `spr_{id:D4}.png` / `spr_{id:D4}_s.png` (MAUI/Android image-resource names
+  must be lowercase, start with a letter, and contain only `[a-z0-9_]` - no
+  hyphens). pokesprite does not yet cover Generation 9 species (Scarlet/
+  Violet/Legends Z-A, dex #906+); those have no file and fall back to the
+  placeholder glyph (see below) - confirmed on-device against a real Gen9
+  save (Skeledirge, dex #911).
+- **Held-item icons**: vendored the same way into `Resources/Images/items/`
+  as `item_{id:D4}.png`, but **keyed by PKHeX's own item ID space** (0-2683,
+  read from `vendor/PKHeX.Core/Resources/text/items/text_Items_en.txt`,
+  where item ID = line number − 1), matched to pokesprite's files by
+  normalized English name - pokesprite's own internal item numbering does
+  **not** correspond to PKHeX item IDs, so a numeric-ID-to-numeric-ID mapping
+  would have silently produced wrong icons for most items. 933 of 2683 items
+  matched (~35%); unmatched IDs (mostly TM/TR items, stored in pokesprite by
+  type/number rather than a readable name, plus assorted items with no
+  pokesprite icon at all) fall back to the placeholder.
+- **Fallback strategy**: rather than maintaining a hardcoded valid-ID list
+  that would go stale as sprite coverage changes, every sprite slot layers a
+  static `sprite_placeholder.svg` (a neutral Poké Ball outline glyph,
+  matching the design's `SpriteSlot` fallback spec) *behind* an `Image` bound
+  to the computed filename. A MAUI `Image` that fails to resolve its `Source`
+  simply renders nothing, so the placeholder shows through underneath with
+  no broken-image glyph and no crash - confirmed on-device for both a
+  missing species (Gen9 Skeledirge) and (implicitly) any of the ~65% of
+  unmatched item IDs.
+- `SpriteHelper.cs` (new) - `SpeciesSpriteFile(species, shiny)` /
+  `ItemSpriteFile(itemId)`, the filename-computation half of the above.
+  `PartyEntryDisplay` (used by both `PartyListPage` and `BoxListPage`'s
+  shared row template) grew computed properties (`SpriteFile`, `IsShiny`,
+  `ItemSpriteFile`, `HasItem`/`HasNoItem`, `ItemName`/`ItemFirstWord`) so the
+  existing `record` continues to flow straight into data-bound
+  `CollectionView` templates without new per-page glue.
+  `PokemonDetailPage.RefreshHero`/`PopulateHeldItem` do the same for the
+  single-item detail-screen hero and Main-card held-item row (a **new
+  read-only display** - held item was previously not shown anywhere in the
+  app at all; it is still not user-editable, matching the existing
+  Nature/Ability read-only precedent).
+- `PkhexMobile.csproj`'s `MauiImage` glob was `Resources\Images\*`
+  (non-recursive) - would have silently skipped both new subdirectories.
+  Changed to `Resources\Images\**\*`, plus `Resize="False"` overrides for
+  the sprite/item PNGs so Resizetizer's default multi-density upscaling
+  doesn't blur the pixel art.
+
+### App icon and splash
+
+Original Poké Ball SVG (not copied from any source) referencing the general
+silhouette of the PKHeX desktop icon, at `Resources/AppIcon/appicon.svg`
+(full icon, used standalone on non-adaptive-icon platforms) and
+`appiconfg.svg` (foreground-only layer, inset for Android's adaptive-icon
+safe zone, composited over the `Color="#F6F8FB"` background set on the
+`MauiIcon` element in the `.csproj`). Same glyph reused for
+`Resources/Splash/splash.svg` and as an in-app brand mark
+(`Resources/Images/pokeball_mark.svg`, shown on `MainPage`). Android's
+`Platforms/Android/Resources/values/colors.xml` (`colorPrimary`/
+`colorPrimaryDark`/`colorAccent`) updated to the new brand red so
+system-level chrome (status bar tint, native `Picker`/`Entry` focus
+underline) matches instead of the stock MAUI purple.
+
+### MainPage: template chrome removed
+
+Dropped the stock "Hello, World! / Welcome to .NET MAUI" content, the
+submarine `dotnet_bot.png` image, and the dead `CounterBtn`/`OnCounterClicked`
+click-counter (unrelated template scaffolding, not app functionality) -
+replaced with a branded header (Poké Ball mark + title) and the existing
+Pick-a-file / View Party / View Boxes flow restyled into cards, functionally
+unchanged.
+
+### On-device regression verification
+
+Driven on `PkhexMobile_Emulator` (real file picker/`FileSaver`, not a
+library-level proxy), screenshots in `verify/UIReskin/screenshots/`:
+
+| Gen | Save | What was exercised | Result |
+|---|---|---|---|
+| 5 | `gen5_real.sav` | Load → party list (sprites render) → detail (Main/Moves/Stats cards, legality banner) → nickname edit (Save button clean→dirty) → Save Changes → real FileSaver dialog → saved → button dirty→clean again → reloaded party list shows edited nickname | ✅ all pass |
+| 1 | `gen1_real.sav` (MEW, maxed stat exp) | Party list sprites (Gen1 dex range fully covered) → detail shows Gen1/2-specific labels ("IVs / DVs (0-15 each; HP derived, SpD linked to SpA)", "EVs / Stat Exp (0-65535 each...)"), HP/SpD IV fields and SpD EV field visibly disabled and mirroring SpA, Ability shows "—", Nature shows "Hardy" (sentinel) | ✅ matches pre-reskin documented behavior exactly, no regressions |
+| 1 | (same) | Typed "99" into an editable IV field | ✅ live-clamped to 15 as digits landed, confirming the "can't be entered in the first place" clamp survived the restyle |
+| 9 | `gen9_real.sav` (Skeledirge, dex #911) | Detail hero shows Poké Ball placeholder (dex #911 > pokesprite's #905 ceiling - expected, not a bug) → changed Species Skeledirge→Quaxwell via the restyled Picker dialog → Save Changes → real FileSaver dialog → saved (status line correctly appended the species-changed legality note) → button dirty→clean | ✅ pass |
+| 9 | (same) | Pulled the exported file, read back via a throwaway PKHeX.Core harness (deleted after use, per existing project convention - see `OnDeviceEvFix` above) | `Species=913 (Quaxwell)`, `Level=100`, **`Stat_Level=100`** (not the species-before-level EXP-reinterpretation bug fixed in the previous session), `Stat_HPMax=299` (recomputed for the new species, not stale) - confirms the two bugs the previous session fixed are still fixed after this session's restyle |
+
+No regressions found in species/move editing, IV/EV editing (both the
+Gen3+ 0-31/0-252 and the Gen1/2 0-15/0-65535 paths), or the save/export
+round trip. The dirty/clean Save button - the one new behavior this session
+added - works as specified on every generation tested.
+
+## Roadmap / not yet started (as of 2026-07-21, post-reskin)
+
+- **Legality-check engine.** `LegalityBadge` UI concept exists in the design
+  bundle but nothing is wired; `LegalityAnalysis` from PKHeX.Core is
+  available but not yet surfaced anywhere in the app.
+- **Box (PC) editing.** Still read-only via the structural null-`parentSave`
+  guard; no box→party moves or slot swaps.
+- **Form/Nature/Ability editing.** Still not user-editable (Nature/Ability
+  are PID-derived on several gens; Form has no per-species form list yet).
+- **Gen9 species sprite gap.** pokesprite (the vendored sprite source) has
+  no Scarlet/Violet/Legends Z-A icons (dex #906+) as of this vendoring pass;
+  those species show the placeholder glyph until a source with Gen9
+  coverage is vendored.
+- **Item icon gap.** ~65% of PKHeX item IDs (mostly TM/TR and minor items)
+  have no matching pokesprite icon and show the placeholder.

@@ -6,26 +6,58 @@
              x:DataType="local:PartyListPage"
              Title="Party">
 
-    <Grid RowDefinitions="Auto,*" Padding="20">
-        <Label x:Name="HeaderLabel"
-               Grid.Row="0"
-               FontSize="16"
-               Margin="0,0,0,10" />
+    <Grid RowDefinitions="Auto,*" Padding="16">
+        <VerticalStackLayout Grid.Row="0" Spacing="2" Margin="0,4,0,12">
+            <Label Text="Party" Style="{StaticResource ScreenTitleStyle}" />
+            <Label x:Name="HeaderLabel" Style="{StaticResource MutedStyle}" />
+        </VerticalStackLayout>
 
         <CollectionView x:Name="PartyList"
                          Grid.Row="1"
                          SelectionMode="Single"
                          SelectionChanged="OnPartySelectionChanged">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="local:PartyEntryDisplay">
-                    <Grid Padding="10" ColumnDefinitions="Auto,*,Auto">
-                        <Label Grid.Column="0" Text="{Binding Slot}" FontAttributes="Bold" WidthRequest="30" />
-                        <VerticalStackLayout Grid.Column="1">
-                            <Label Text="{Binding Nickname}" FontAttributes="Bold" />
-                            <Label Text="{Binding SpeciesName}" FontSize="12" TextColor="Gray" />
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2" Text="{Binding Level, StringFormat='Lv. {0}'}" VerticalOptions="Center" />
-                    </Grid>
+                    <Border Style="{StaticResource RowBorderStyle}">
+                        <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="12">
+                            <Border Grid.Column="0" WidthRequest="52" HeightRequest="52"
+                                    Stroke="Transparent" StrokeThickness="0"
+                                    BackgroundColor="{StaticResource SurfaceSunken}">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="12" />
+                                </Border.StrokeShape>
+                                <Grid>
+                                    <Image Source="sprite_placeholder.svg" Aspect="AspectFit"
+                                           WidthRequest="26" HeightRequest="26"
+                                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                    <Image Source="{Binding SpriteFile}" Aspect="AspectFit"
+                                           WidthRequest="44" HeightRequest="44"
+                                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                <HorizontalStackLayout Spacing="5">
+                                    <Label Text="{Binding Nickname}" Style="{StaticResource RowTitleStyle}" />
+                                    <Label Text="&#9733;" Style="{StaticResource ShinyStarStyle}" IsVisible="{Binding IsShiny}" />
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding SpeciesName}" Style="{StaticResource MutedStyle}" />
+                            </VerticalStackLayout>
+
+                            <VerticalStackLayout Grid.Column="2" Spacing="4" HorizontalOptions="End" VerticalOptions="Center">
+                                <Label Text="{Binding Level, StringFormat='Lv {0}'}" Style="{StaticResource MonoValueStyle}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Text="{Binding ItemFirstWord}" Style="{StaticResource MonoMutedStyle}"
+                                       IsVisible="{Binding HasItem}" HorizontalTextAlignment="End" />
+                                <Label Text="No item" Style="{StaticResource MonoMutedStyle}"
+                                       IsVisible="{Binding HasNoItem}"
+                                       HorizontalTextAlignment="End" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

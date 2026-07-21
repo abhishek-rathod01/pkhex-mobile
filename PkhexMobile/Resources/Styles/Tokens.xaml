@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- ================================================================
+         Non-color design tokens — ported from tokens/spacing.css,
+         tokens/radii.css, tokens/typography.css, tokens/shadows.css.
+         ================================================================ -->
+
+    <!-- ===== Spacing (4px base grid) ===== -->
+    <x:Double x:Key="Space0">0</x:Double>
+    <x:Double x:Key="Space1">4</x:Double>
+    <x:Double x:Key="Space2">8</x:Double>
+    <x:Double x:Key="Space3">12</x:Double>
+    <x:Double x:Key="Space4">16</x:Double>
+    <x:Double x:Key="Space5">20</x:Double>
+    <x:Double x:Key="Space6">24</x:Double>
+    <x:Double x:Key="Space8">32</x:Double>
+    <x:Double x:Key="Space10">40</x:Double>
+    <x:Double x:Key="Space12">48</x:Double>
+    <x:Double x:Key="Space16">64</x:Double>
+
+    <!-- Semantic spacing -->
+    <x:Double x:Key="GutterScreen">16</x:Double>
+    <x:Double x:Key="GapCard">12</x:Double>
+    <x:Double x:Key="PadCard">16</x:Double>
+    <x:Double x:Key="GapRow">12</x:Double>
+    <x:Double x:Key="TouchMin">44</x:Double>
+
+    <!-- ===== Corner radii ===== -->
+    <x:Double x:Key="RadiusXs">6</x:Double>
+    <x:Double x:Key="RadiusSm">8</x:Double>
+    <x:Double x:Key="RadiusMd">12</x:Double>
+    <x:Double x:Key="RadiusLg">16</x:Double>
+    <x:Double x:Key="RadiusXl">20</x:Double>
+    <x:Double x:Key="Radius2xl">28</x:Double>
+    <x:Double x:Key="RadiusPill">999</x:Double>
+    <x:Double x:Key="RadiusCard">16</x:Double>
+    <x:Double x:Key="RadiusControl">12</x:Double>
+
+    <!-- ===== Type scale (1.20 ratio) ===== -->
+    <x:Double x:Key="Text2xs">11</x:Double>
+    <x:Double x:Key="TextXs">12</x:Double>
+    <x:Double x:Key="TextSm">13</x:Double>
+    <x:Double x:Key="TextBase">15</x:Double>
+    <x:Double x:Key="TextMd">16</x:Double>
+    <x:Double x:Key="TextLg">18</x:Double>
+    <x:Double x:Key="TextXl">21</x:Double>
+    <x:Double x:Key="Text2xl">25</x:Double>
+    <x:Double x:Key="Text3xl">30</x:Double>
+    <x:Double x:Key="Text4xl">36</x:Double>
+
+    <!-- Line heights (MAUI LineHeight is a multiplier, same semantics as CSS unitless line-height) -->
+    <x:Double x:Key="LhTight">1.1</x:Double>
+    <x:Double x:Key="LhSnug">1.25</x:Double>
+    <x:Double x:Key="LhNormal">1.45</x:Double>
+    <x:Double x:Key="LhRelaxed">1.6</x:Double>
+
+    <!-- ===== Motion — durations in ms, consumed by PressScaleBehavior / code-behind animations -->
+    <x:Double x:Key="DurFast">120</x:Double>
+    <x:Double x:Key="DurBase">200</x:Double>
+    <x:Double x:Key="DurSlow">320</x:Double>
+
+    <!-- ===== Shadows — elevation ramp (Border.Shadow resources) ===== -->
+    <Shadow x:Key="ShadowXs" Brush="#141A23" Opacity="0.06" Radius="2" Offset="0,1" />
+    <Shadow x:Key="ShadowSm" Brush="#141A23" Opacity="0.08" Radius="3" Offset="0,1" />
+    <Shadow x:Key="ShadowCard" Brush="#141A23" Opacity="0.06" Radius="8" Offset="0,2" />
+    <Shadow x:Key="ShadowRaised" Brush="#141A23" Opacity="0.10" Radius="20" Offset="0,6" />
+    <Shadow x:Key="ShadowOverlay" Brush="#0B0F16" Opacity="0.20" Radius="48" Offset="0,16" />
+
+</ResourceDictionary>

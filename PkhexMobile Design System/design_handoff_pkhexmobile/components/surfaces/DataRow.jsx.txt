@@ -1,0 +1,32 @@
+import React from 'react';
+
+/* Label/value row used throughout detail views. `mono` renders the value in
+   the monospace face (IDs, dates, numeric fields). `hint` shows generation
+   context or secondary note under the value. */
+export function DataRow({ label, value, hint, icon, mono = false, action, divider = true, style, ...rest }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+        minHeight: 48, padding: '10px 0',
+        borderBottom: divider ? '1px solid var(--border-subtle)' : 'none', ...style,
+      }}
+      {...rest}
+    >
+      {icon && <span style={{ display: 'inline-flex', color: 'var(--text-tertiary)', flex: '0 0 auto' }}>{icon}</span>}
+      <span style={{
+        font: 'var(--fw-medium) var(--text-sm)/1.2 var(--font-body)', color: 'var(--text-tertiary)',
+        flex: '0 0 auto', minWidth: 92,
+      }}>{label}</span>
+      <span style={{ flex: 1 }} />
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, textAlign: 'right' }}>
+        <span style={{
+          font: mono ? 'var(--fw-medium) var(--text-base)/1.2 var(--font-mono)' : 'var(--fw-semibold) var(--text-base)/1.2 var(--font-body)',
+          color: 'var(--text-primary)',
+        }}>{value}</span>
+        {hint && <span style={{ font: 'var(--fw-medium) var(--text-2xs)/1 var(--font-body)', color: 'var(--text-tertiary)' }}>{hint}</span>}
+      </span>
+      {action}
+    </div>
+  );
+}

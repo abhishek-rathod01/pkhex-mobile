@@ -1,0 +1,167 @@
+/* Detail screen — full Pokémon inspector organised around PKHeX's tab groups,
+   reimagined as stacked mobile cards. Layout leaves headroom for a legality
+   badge (present) and future inline-edit affordances (edit IconButtons). */
+const { Card, SectionHeader, DataRow, StatBar, TypeBadge, Chip, Badge, LegalityBadge, SpriteSlot, IconButton } = window.PkhexMobileDesignSystem_375f82;
+
+function MoveRow({ mv }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+      <TypeBadge type={mv.type} solid size="sm" style={{ width: 62, justifyContent: 'center' }} />
+      <span style={{ flex: 1, font: 'var(--fw-semibold) 15px/1 var(--font-body)', color: 'var(--text-primary)' }}>{mv.name}</span>
+      <span style={{ font: 'var(--fw-medium) 13px/1 var(--font-mono)', color: 'var(--text-tertiary)' }}>PP {mv.pp}/{mv.ppMax}</span>
+    </div>
+  );
+}
+
+function Section({ title, count, icon, action, defaultOpen = true, children }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <Card elevated style={{ padding: '14px 16px' }}>
+      <SectionHeader title={title} count={count} icon={icon} action={action} collapsible open={open} onToggle={() => setOpen(!open)} />
+      <div style={{ maxHeight: open ? 2000 : 0, overflow: 'hidden', transition: 'max-height var(--dur-slow) var(--ease-standard)' }}>
+        <div style={{ paddingTop: 4 }}>{children}</div>
+      </div>
+    </Card>
+  );
+}
+
+function EditBtn() {
+  const I = window.PKXIcons;
+  return <IconButton size="sm" label="Edit section"><I.Pencil size={16} /></IconButton>;
+}
+
+function DetailScreen({ onBack, detail = window.PKX_DETAIL }) {
+  const { StatusBar } = window.PKXChrome;
+  const I = window.PKXIcons;
+  const d = detail;
+  const genderIcon = d.gender === 'M'
+    ? <I.Male size={15} style={{ color: 'var(--stat-spa)' }} />
+    : d.gender === 'F'
+      ? <I.Female size={15} style={{ color: 'var(--stat-spe)' }} />
+      : <I.Genderless size={14} style={{ color: 'var(--text-tertiary)' }} />;
+  const statExp = d.evMax > 999;
+  const BANNER = {
+    pass: { bg: 'var(--status-pass-bg)', fg: 'var(--status-pass-fg)', msg: `All values within legal range for Gen ${d.gen}.` },
+    warn: { bg: 'var(--status-warn-bg)', fg: 'var(--status-warn-fg)', msg: `Review recommended — unusual values for Gen ${d.gen}.` },
+    fail: { bg: 'var(--status-fail-bg)', fg: 'var(--status-fail-fg)', msg: `${d.flags || 'Several'} values fail legality for Gen ${d.gen}.` },
+  }[d.legality];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-app)' }}>
+      <StatusBar />
+      {/* nav bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px 8px', flex: '0 0 auto' }}>
+        <IconButton label="Back" onClick={onBack}><I.ChevronLeft size={22} /></IconButton>
+        <span style={{ flex: 1, textAlign: 'center', font: 'var(--fw-semibold) 15px/1 var(--font-body)', color: 'var(--text-secondary)' }}>Party · Slot 1</span>
+        <IconButton label="More"><I.More size={20} /></IconButton>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 120px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* hero */}
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', padding: '6px 4px 8px' }}>
+          <SpriteSlot size="xl" shiny={d.shiny} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <span style={{ font: 'var(--fw-medium) 13px/1 var(--font-mono)', color: 'var(--text-tertiary)' }}>#{String(d.dex).padStart(4, '0')}</span>
+              {d.shiny && <Badge tone="shiny" size="sm" icon={<I.Star size={11} />}>Shiny</Badge>}
+            </div>
+            <h1 style={{ margin: '0 0 2px', font: 'var(--fw-bold) 28px/1 var(--font-display)', letterSpacing: 'var(--ls-tight)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
+              {d.nick || d.species}{genderIcon}
+            </h1>
+            <div style={{ font: 'var(--fw-medium) 14px/1 var(--font-body)', color: 'var(--text-tertiary)', marginBottom: 10 }}>{d.nick ? `${d.species} · Lv ${d.level}` : `Lv ${d.level}`}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {d.types.map((t) => <TypeBadge key={t} type={t} solid />)}
+            </div>
+          </div>
+        </div>
+
+        {/* legality banner — reserved surface */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: BANNER.bg, borderRadius: 'var(--radius-card)' }}>
+          <LegalityBadge status={d.legality} count={d.flags} />
+          <span style={{ flex: 1, font: 'var(--fw-medium) 13px/1.35 var(--font-body)', color: BANNER.fg }}>{BANNER.msg}</span>
+          <I.ChevronRight size={18} style={{ color: BANNER.fg, opacity: 0.6 }} />
+        </div>
+
+        {/* MAIN */}
+        <Section title="Main" icon={<I.User size={15} />} action={<EditBtn />}>
+          <DataRow label="Species" value={`${d.species} · #${String(d.dex).padStart(4,'0')}`} />
+          <DataRow label="Nickname" value={d.nick || <span style={{ color: 'var(--text-tertiary)', fontWeight: 'var(--fw-medium)' }}>Not set · {d.species}</span>} />
+          <DataRow label="Level" value={d.level} mono />
+          {d.ability
+            ? <DataRow label="Ability" value={d.ability} />
+            : <DataRow label="Ability" value={<span style={{ color: 'var(--text-tertiary)' }}>— not in Gen {d.gen}</span>} />}
+          <DataRow label="Held item" value={d.item ? <Chip icon={<I.Bag size={13} />}>{d.item}</Chip> : <span style={{ color: 'var(--text-tertiary)', fontWeight: 'var(--fw-medium)' }}>None</span>} />
+          {d.nature
+            ? <DataRow label="Nature" value={<Chip tone="accent">{d.nature}</Chip>} hint="+SpA · −Atk" />
+            : <DataRow label="Nature" value={<span style={{ color: 'var(--text-tertiary)' }}>— not in Gen {d.gen}</span>} />}
+          <DataRow label="Gender" value={d.gender === 'M' ? 'Male' : d.gender === 'F' ? 'Female' : 'Genderless'} />
+          <DataRow label="Form" value={d.form} divider={false} />
+        </Section>
+
+        {/* MET */}
+        <Section title="Met info" icon={<I.MapPin size={15} />} defaultOpen={false}>
+          <DataRow label="Location" value={d.met.location || 'Not recorded'} icon={<I.MapPin size={16} />} />
+          <DataRow label="Met level" value={d.met.levelMet != null ? d.met.levelMet : '—'} mono />
+          <DataRow label="Date met" value={d.met.date || <span style={{ color: 'var(--text-tertiary)' }}>Not recorded (Gen {d.gen})</span>} mono icon={<I.Calendar size={16} />} />
+          <DataRow label="Ball" value={d.met.ball ? <Chip icon={<I.Ball size={13} />}>{d.met.ball}</Chip> : <span style={{ color: 'var(--text-tertiary)' }}>—</span>} />
+          <DataRow label="Egg" value={d.met.egg ? 'Yes' : 'No'} icon={<I.Egg size={16} />} divider={false} />
+        </Section>
+
+        {/* STATS */}
+        <Section title="Stats" icon={<I.Sword size={15} />} action={<EditBtn />}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '2px 0 12px' }}>
+            <Badge tone="info">Gen {d.gen}</Badge>
+            <span style={{ font: 'var(--fw-medium) 11px/1 var(--font-body)', color: 'var(--text-tertiary)' }}>
+              IV 0–{d.ivMax} · {statExp ? 'Stat-EXP' : 'EV'} 0–{d.evMax}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {d.stats.map((s) => <StatBar key={s.stat} {...s} ivMax={d.ivMax} evMax={d.evMax} />)}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+            <span style={{ font: 'var(--fw-semibold) 12px/1 var(--font-body)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--ls-wide)' }}>Total</span>
+            <span style={{ font: 'var(--fw-bold) 14px/1 var(--font-mono)', color: 'var(--text-primary)' }}>{d.stats.reduce((a, s) => a + s.value, 0)}</span>
+          </div>
+        </Section>
+
+        {/* MOVES */}
+        <Section title="Moves" count={d.moves.length} icon={<I.Sparkles size={15} />} action={<EditBtn />}>
+          {d.moves.map((mv, i) => <MoveRow key={i} mv={mv} />)}
+          <button style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', font: 'var(--fw-semibold) 13px/1 var(--font-body)' }}>
+            <I.Plus size={15} /> Add move
+          </button>
+        </Section>
+
+        {/* OT / MISC */}
+        <Section title="OT / Misc" icon={<I.Award size={15} />} defaultOpen={false}>
+          <DataRow label="OT" value={d.main.ot} />
+          <DataRow label="Trainer ID" value={d.main.sid ? `${d.main.tid} / ${d.main.sid}` : d.main.tid} hint={d.main.sid ? 'TID / SID' : 'TID (Gen ' + d.gen + ')'} mono />
+          <DataRow label="Friendship" value={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><I.Heart size={14} style={{ color: 'var(--accent)' }} />{d.main.friendship}</span>} />
+          <DataRow label="Language" value={d.main.language} mono />
+          <DataRow label="Origin game" value={d.main.game} />
+          <div style={{ padding: '12px 0 4px' }}>
+            <div style={{ font: 'var(--fw-semibold) 12px/1 var(--font-body)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--ls-wide)', marginBottom: 9 }}>Ribbons · {d.ribbons.length}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {d.ribbons.map((r) => <Chip key={r} icon={<I.Award size={13} />}>{r}</Chip>)}
+            </div>
+          </div>
+          <div style={{ padding: '10px 0 2px' }}>
+            <div style={{ font: 'var(--fw-semibold) 12px/1 var(--font-body)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--ls-wide)', marginBottom: 6 }}>Memory</div>
+            <p style={{ margin: 0, font: 'var(--fw-medium) 13px/1.5 var(--font-body)', color: 'var(--text-secondary)' }}>{d.memories}</p>
+          </div>
+        </Section>
+      </div>
+
+      {/* sticky action bar */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', gap: 10, padding: '12px 16px 26px', background: 'linear-gradient(to top, var(--surface-card) 72%, transparent)', flex: '0 0 auto' }}>
+        <button style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 48, padding: '0 16px', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-control)', font: 'var(--fw-semibold) 14px/1 var(--font-body)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <I.Sparkles size={17} /> Verify
+        </button>
+        <button style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 48, background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-control)', boxShadow: 'var(--shadow-xs)', font: 'var(--fw-semibold) 15px/1 var(--font-body)', color: 'var(--text-on-accent)', cursor: 'pointer' }}>
+          <I.Pencil size={17} /> Edit Pokémon
+        </button>
+      </div>
+    </div>
+  );
+}
+window.DetailScreen = DetailScreen;

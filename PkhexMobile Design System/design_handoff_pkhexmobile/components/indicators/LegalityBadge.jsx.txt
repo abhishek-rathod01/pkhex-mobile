@@ -1,0 +1,36 @@
+import React from 'react';
+
+const CONFIG = {
+  pass: { fg: 'var(--status-pass-fg)', bg: 'var(--status-pass-bg)', label: 'Legal', icon: 'check' },
+  fail: { fg: 'var(--status-fail-fg)', bg: 'var(--status-fail-bg)', label: 'Illegal', icon: 'x' },
+  warn: { fg: 'var(--status-warn-fg)', bg: 'var(--status-warn-bg)', label: 'Review', icon: 'alert' },
+};
+
+const ICON = {
+  check: <path d="M20 6 9 17l-5-5" />,
+  x: <path d="M18 6 6 18M6 6l12 12" />,
+  alert: <><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></>,
+};
+
+/* Reserved slot for the legality-check result. Compact by default; pass
+   `count` to surface number of flags on a fail/review state. */
+export function LegalityBadge({ status = 'pass', count, showLabel = true, size = 'md', style, ...rest }) {
+  const c = CONFIG[status] || CONFIG.pass;
+  const sm = size === 'sm';
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: sm ? 4 : 6,
+        padding: sm ? '3px 8px' : '5px 11px', color: c.fg, background: c.bg,
+        borderRadius: 'var(--radius-pill)',
+        font: `var(--fw-bold) ${sm ? 'var(--text-2xs)' : 'var(--text-xs)'}/1 var(--font-body)`,
+        letterSpacing: 'var(--ls-wide)', whiteSpace: 'nowrap', ...style,
+      }}
+      {...rest}
+    >
+      <svg width={sm ? 12 : 14} height={sm ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">{ICON[c.icon]}</svg>
+      {showLabel && c.label.toUpperCase()}
+      {count != null && count > 0 && <span style={{ opacity: 0.75 }}>· {count}</span>}
+    </span>
+  );
+}

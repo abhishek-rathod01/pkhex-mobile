@@ -12,6 +12,13 @@ public partial class PokemonDetailPage : ContentPage
     int ivMax = 31;
     int evMax = 252;
 
+    // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
+    // disabled while the screen has no unsaved changes, enabled the instant any field is
+    // edited, disabled again immediately after a successful save. isLoading suppresses the
+    // TextChanged/SelectedIndexChanged noise LoadPokemon's own field population fires.
+    bool isLoading;
+    bool isDirty;
+
     // Picker index -> game ID maps, rebuilt per Pokémon from its format's MaxSpeciesID/MaxMoveID.
     // Species list starts at ID 1 (0 = empty, never valid for a stored mon); move list starts at
     // ID 0 so "(None)" is selectable to clear a slot.
@@ -40,6 +47,27 @@ public partial class PokemonDetailPage : ContentPage
         // SpD is disabled for Gen1/2 (mirrors SpA, see LoadPokemon) - harmless no-op there,
         // same reasoning as IvSpdEntry above.
         EvSpdEntry.TextChanged += OnEvIndependentEntryTextChanged;
+
+        NicknameEntry.TextChanged += (_, _) => MarkDirty();
+        LevelEntry.TextChanged += (_, _) => MarkDirty();
+        SpeciesPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        Move1Picker.SelectedIndexChanged += (_, _) => MarkDirty();
+        Move2Picker.SelectedIndexChanged += (_, _) => MarkDirty();
+        Move3Picker.SelectedIndexChanged += (_, _) => MarkDirty();
+        Move4Picker.SelectedIndexChanged += (_, _) => MarkDirty();
+    }
+
+    private void MarkDirty()
+    {
+        if (isLoading)
+            return;
+        isDirty = true;
+        UpdateSaveButtonState();
+    }
+
+    private void UpdateSaveButtonState()
+    {
+        SaveChangesBtn.IsEnabled = isDirty && parentSave is not null;
     }
 
     protected override void OnAppearing()
@@ -63,6 +91,24 @@ public partial class PokemonDetailPage : ContentPage
 
     private void LoadPokemon(PKM p)
     {
+        // Programmatic field population below fires the same TextChanged/SelectedIndexChanged
+        // handlers a real edit would - isLoading suppresses MarkDirty() for the duration so the
+        // Save button starts disabled (clean), not enabled, immediately after a fresh load.
+        isLoading = true;
+        try
+        {
+            LoadPokemonCore(p);
+        }
+        finally
+        {
+            isLoading = false;
+            isDirty = false;
+            UpdateSaveButtonState();
+        }
+    }
+
+    private void LoadPokemonCore(PKM p)
+    {
         // Gen1/2 IVs are 4-bit hardware DVs (0-15), not the 5-bit 0-31 range Gen3+ uses.
         // This mirrors PKHeX.WinForms, which sets NumericUpDown.Maximum to 15 for these
         // generations' IV controls.
@@ -72,7 +118,7 @@ public partial class PokemonDetailPage : ContentPage
         // confirmed against real Gen1/2 saves with maxed stat exp (see PROGRESS.md).
         evMax = isGen12 ? 65535 : 252;
 
-        TitleLabel.Text = PkmDisplayHelper.GetDisplayName(p);
+        RefreshHero(p);
         NicknameEntry.Text = p.Nickname;
         LevelEntry.Text = p.CurrentLevel.ToString();
 
@@ -113,6 +159,8 @@ public partial class PokemonDetailPage : ContentPage
         PopulateSpeciesPicker(p);
         PopulateMovePickers(p);
 
+        PopulateHeldItem(p);
+
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
 
@@ -126,6 +174,28 @@ public partial class PokemonDetailPage : ContentPage
         };
 
         StatsList.ItemsSource = rows;
+    }
+
+    // Sprite/name/shiny hero block - re-run after a successful save too, since species and
+    // shiny-affecting fields (IVs, on some gens) can change from the edit that was just saved.
+    private void RefreshHero(PKM p)
+    {
+        TitleLabel.Text = PkmDisplayHelper.GetDisplayName(p);
+        ShinyStarLabel.IsVisible = p.IsShiny;
+        SpriteImage.Source = SpriteHelper.SpeciesSpriteFile(p.Species, p.IsShiny);
+
+        var speciesName = PkmDisplayHelper.GetSpeciesName(p.Species);
+        SubtitleLabel.Text = TitleLabel.Text == speciesName
+            ? $"Lv {p.CurrentLevel}"
+            : $"{speciesName} · Lv {p.CurrentLevel}";
+    }
+
+    private void PopulateHeldItem(PKM p)
+    {
+        bool hasItem = p.HeldItem != 0;
+        ItemIconBorder.IsVisible = hasItem;
+        ItemSpriteImage.Source = hasItem ? SpriteHelper.ItemSpriteFile(p.HeldItem) : null;
+        ItemNameLabel.Text = hasItem ? PkmDisplayHelper.GetItemName(p.HeldItem) : "None";
     }
 
     private void PopulateSpeciesPicker(PKM p)
@@ -185,12 +255,14 @@ public partial class PokemonDetailPage : ContentPage
     {
         ClampEntryToMax(sender as Entry, ivMax);
         RefreshGen12DerivedFields();
+        MarkDirty();
     }
 
     private void OnEvIndependentEntryTextChanged(object? sender, TextChangedEventArgs e)
     {
         ClampEntryToMax(sender as Entry, evMax);
         RefreshGen12DerivedFields();
+        MarkDirty();
     }
 
     private static void ClampEntryToMax(Entry? entry, int max)
@@ -354,7 +426,13 @@ public partial class PokemonDetailPage : ContentPage
                     ? " (Species/move edits are applied as-is; other tools may flag this as illegal.)"
                     : string.Empty;
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
-                TitleLabel.Text = PkmDisplayHelper.GetDisplayName(pk);
+                RefreshHero(pk);
+                PopulateHeldItem(pk);
+
+                // Design-notes.md Save button rule 3: return to disabled immediately after a
+                // successful save.
+                isDirty = false;
+                UpdateSaveButtonState();
             }
             else
             {

@@ -6,32 +6,58 @@
              x:DataType="local:BoxListPage"
              Title="Boxes">
 
-    <Grid RowDefinitions="Auto,Auto,*" Padding="20">
-        <Picker x:Name="BoxPicker"
-                Grid.Row="0"
-                Title="Box"
-                SelectedIndexChanged="OnBoxSelected"
-                Margin="0,0,0,10" />
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16">
+        <Label Grid.Row="0" Text="Boxes" Style="{StaticResource ScreenTitleStyle}" Margin="0,4,0,10" />
 
-        <Label x:Name="HeaderLabel"
-               Grid.Row="1"
-               FontSize="16"
-               Margin="0,0,0,10" />
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12" Margin="0,0,0,12">
+            <VerticalStackLayout Spacing="6">
+                <Picker x:Name="BoxPicker"
+                        Title="Box"
+                        SelectedIndexChanged="OnBoxSelected" />
+                <Label x:Name="HeaderLabel" Style="{StaticResource MutedStyle}" />
+            </VerticalStackLayout>
+        </Border>
 
         <CollectionView x:Name="BoxList"
                          Grid.Row="2"
                          SelectionMode="Single"
                          SelectionChanged="OnBoxEntrySelected">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="local:PartyEntryDisplay">
-                    <Grid Padding="10" ColumnDefinitions="Auto,*,Auto">
-                        <Label Grid.Column="0" Text="{Binding Slot}" FontAttributes="Bold" WidthRequest="30" />
-                        <VerticalStackLayout Grid.Column="1">
-                            <Label Text="{Binding Nickname}" FontAttributes="Bold" />
-                            <Label Text="{Binding SpeciesName}" FontSize="12" TextColor="Gray" />
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2" Text="{Binding Level, StringFormat='Lv. {0}'}" VerticalOptions="Center" />
-                    </Grid>
+                    <Border Style="{StaticResource RowBorderStyle}">
+                        <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="12">
+                            <Border Grid.Column="0" WidthRequest="52" HeightRequest="52"
+                                    Stroke="Transparent" StrokeThickness="0"
+                                    BackgroundColor="{StaticResource SurfaceSunken}">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="12" />
+                                </Border.StrokeShape>
+                                <Grid>
+                                    <Image Source="sprite_placeholder.svg" Aspect="AspectFit"
+                                           WidthRequest="26" HeightRequest="26"
+                                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                    <Image Source="{Binding SpriteFile}" Aspect="AspectFit"
+                                           WidthRequest="44" HeightRequest="44"
+                                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                <HorizontalStackLayout Spacing="5">
+                                    <Label Text="{Binding Nickname}" Style="{StaticResource RowTitleStyle}" />
+                                    <Label Text="&#9733;" Style="{StaticResource ShinyStarStyle}" IsVisible="{Binding IsShiny}" />
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding SpeciesName}" Style="{StaticResource MutedStyle}" />
+                            </VerticalStackLayout>
+
+                            <Label Grid.Column="2" Text="{Binding Level, StringFormat='Lv {0}'}"
+                                   Style="{StaticResource MonoValueStyle}"
+                                   HorizontalOptions="End" VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

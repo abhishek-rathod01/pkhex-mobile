@@ -1,0 +1,30 @@
+import React from 'react';
+
+const TONES = {
+  neutral: { fg: 'var(--text-secondary)', bg: 'var(--surface-sunken)' },
+  pass: { fg: 'var(--status-pass-fg)', bg: 'var(--status-pass-bg)' },
+  warn: { fg: 'var(--status-warn-fg)', bg: 'var(--status-warn-bg)' },
+  fail: { fg: 'var(--status-fail-fg)', bg: 'var(--status-fail-bg)' },
+  info: { fg: 'var(--status-info-fg)', bg: 'var(--status-info-bg)' },
+  shiny: { fg: 'var(--shiny-fg)', bg: 'var(--shiny-bg)' },
+};
+
+export function Badge({ tone = 'neutral', icon, children, size = 'md', style, ...rest }) {
+  const t = TONES[tone] || TONES.neutral;
+  const sm = size === 'sm';
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: sm ? 4 : 5,
+        padding: sm ? '2px 7px' : '4px 9px', color: t.fg, background: t.bg,
+        borderRadius: 'var(--radius-pill)',
+        font: `var(--fw-bold) ${sm ? 'var(--text-2xs)' : 'var(--text-xs)'}/1 var(--font-body)`,
+        letterSpacing: 'var(--ls-wide)', whiteSpace: 'nowrap', ...style,
+      }}
+      {...rest}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}

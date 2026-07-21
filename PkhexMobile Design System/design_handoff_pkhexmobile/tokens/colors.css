@@ -1,0 +1,89 @@
+:root {
+  /* ===== Base neutrals — cool slate ===== */
+  --slate-0: #FFFFFF;
+  --slate-50: #F6F8FB;
+  --slate-100: #EDF1F6;
+  --slate-200: #DEE4EC;
+  --slate-300: #C6CFDB;
+  --slate-400: #98A3B3;
+  --slate-500: #6B7686;
+  --slate-600: #4C5666;
+  --slate-700: #353E4C;
+  --slate-800: #212834;
+  --slate-900: #141A23;
+  --slate-950: #0B0F16;
+
+  /* ===== Brand — refined poké red ===== */
+  --red-50: #FFF1F1;
+  --red-100: #FFE0E1;
+  --red-200: #FFC7C9;
+  --red-300: #F79FA2;
+  --red-400: #F06D72;
+  --red-500: #E5484D;
+  --red-600: #D02D33;
+  --red-700: #AE2126;
+  --red-800: #8B1B1F;
+
+  /* ===== Semantic hues ===== */
+  --green-100: #D6F5E6;
+  --green-500: #16A46B;
+  --green-600: #0E8556;
+  --amber-100: #FCEFCB;
+  --amber-500: #E7960B;
+  --amber-600: #C07C05;
+  --blue-100: #DBEAFE;
+  --blue-500: #3B7DED;
+  --blue-600: #2A63C4;
+  --gold-100: #FBEFC5;
+  --gold-400: #F2C24B;
+  --gold-500: #E7A812;
+
+  /* ===== Semantic aliases (light) ===== */
+  --bg-app: var(--slate-50);
+  --bg-app-elevated: var(--slate-100);
+  --surface-card: var(--slate-0);
+  --surface-raised: var(--slate-0);
+  --surface-sunken: var(--slate-100);
+  --surface-inset: var(--slate-50);
+
+  --border-subtle: var(--slate-200);
+  --border-default: var(--slate-300);
+  --border-strong: var(--slate-400);
+
+  --text-primary: var(--slate-900);
+  --text-secondary: var(--slate-600);
+  --text-tertiary: var(--slate-500);
+  --text-disabled: var(--slate-400);
+  --text-on-accent: var(--slate-0);
+
+  --accent: var(--red-500);
+  --accent-hover: var(--red-600);
+  --accent-active: var(--red-700);
+  --accent-soft: var(--red-50);
+  --accent-soft-border: var(--red-200);
+
+  --focus-ring: color-mix(in oklch, var(--red-500) 45%, transparent);
+
+  /* ===== Status ===== */
+  --status-pass-fg: var(--green-600);
+  --status-pass-bg: var(--green-100);
+  --status-warn-fg: var(--amber-600);
+  --status-warn-bg: var(--amber-100);
+  --status-fail-fg: var(--red-700);
+  --status-fail-bg: var(--red-100);
+  --status-info-fg: var(--blue-600);
+  --status-info-bg: var(--blue-100);
+
+  /* ===== Shiny ===== */
+  --shiny-fg: var(--gold-500);
+  --shiny-bg: var(--gold-100);
+
+  /* ===== Stat accent (HP/Atk/Def/SpA/SpD/Spe) ===== */
+  --stat-hp: #EB5A54;
+  --stat-atk: #F0913E;
+  --stat-def: #F2C94C;
+  --stat-spa: #62A9F5;
+  --stat-spd: #58C48A;
+  --stat-spe: #E06BC9;
+  --stat-track: var(--slate-200);
+}

@@ -29,4 +29,10 @@ public static class PkmDisplayHelper
         var list = GameInfo.Strings.Natures;
         return (int)nature < list.Count ? list[(int)nature] : nature.ToString();
     }
+
+    public static string GetItemName(int item)
+    {
+        var list = GameInfo.Strings.Item;
+        return item > 0 && item < list.Count ? list[item] : string.Empty;
+    }
 }

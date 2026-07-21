@@ -1,0 +1,41 @@
+import React from 'react';
+
+/* Group header for detail-screen sections. Optionally collapsible with a
+   chevron and an item count; supports a trailing action (e.g. edit button). */
+export function SectionHeader({ title, icon, count, collapsible = false, open = true, onToggle, action, style, ...rest }) {
+  const clickable = collapsible && onToggle;
+  return (
+    <div
+      onClick={clickable ? onToggle : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+        minHeight: 40, cursor: clickable ? 'pointer' : 'default',
+        userSelect: 'none', ...style,
+      }}
+      {...rest}
+    >
+      {icon && <span style={{ display: 'inline-flex', color: 'var(--text-tertiary)' }}>{icon}</span>}
+      <span style={{
+        font: 'var(--fw-bold) var(--text-xs)/1 var(--font-body)',
+        letterSpacing: 'var(--ls-caps)', textTransform: 'uppercase', color: 'var(--text-tertiary)',
+      }}>{title}</span>
+      {count != null && (
+        <span style={{
+          font: 'var(--fw-semibold) var(--text-2xs)/1 var(--font-mono)', color: 'var(--text-tertiary)',
+          background: 'var(--surface-sunken)', borderRadius: 'var(--radius-pill)', padding: '3px 7px',
+        }}>{count}</span>
+      )}
+      <span style={{ flex: 1 }} />
+      {action}
+      {collapsible && (
+        <span style={{
+          display: 'inline-flex', color: 'var(--text-tertiary)',
+          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform var(--dur-base) var(--ease-standard)',
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </span>
+      )}
+    </div>
+  );
+}

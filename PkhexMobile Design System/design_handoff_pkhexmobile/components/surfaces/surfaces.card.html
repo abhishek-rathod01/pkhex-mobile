@@ -1,0 +1,39 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Surfaces" subtitle="Card, SectionHeader, DataRow, StatBar, SpriteSlot" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;font-family:var(--font-body);background:var(--bg-app);color:var(--text-primary)}#root{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { Card, SectionHeader, DataRow, StatBar, SpriteSlot } = window.PkhexMobileDesignSystem_375f82;
+function Demo(){
+  return (<React.Fragment>
+    <Card elevated>
+      <SectionHeader title="Main" count={6}/>
+      <DataRow label="Species" value="Charizard"/>
+      <DataRow label="Ability" value="Blaze"/>
+      <DataRow label="OT" value="RED" hint="TID 123456" mono divider={false}/>
+    </Card>
+    <Card elevated>
+      <SectionHeader title="Stats"/>
+      <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:8}}>
+        <StatBar stat="hp" label="HP" value={167} iv={31} ev={4}/>
+        <StatBar stat="atk" label="ATK" value={130} iv={31} ev={0}/>
+        <StatBar stat="spa" label="SPA" value={193} iv={31} ev={252}/>
+        <StatBar stat="spe" label="SPE" value={167} iv={31} ev={252}/>
+      </div>
+    </Card>
+    <Card elevated padded={false} style={{gridColumn:'1 / -1'}}>
+      <div style={{display:'flex',alignItems:'center',gap:14,padding:14}}>
+        <SpriteSlot size="lg"/>
+        <SpriteSlot size="lg" shiny/>
+        <div style={{font:'var(--fw-medium) 13px/1.5 var(--font-body)',color:'var(--text-secondary)'}}>SpriteSlot — neutral placeholder and shiny frame. Production supplies real sprite PNGs.</div>
+      </div>
+    </Card>
+  </React.Fragment>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

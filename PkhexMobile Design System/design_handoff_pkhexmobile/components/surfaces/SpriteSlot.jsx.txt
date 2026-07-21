@@ -1,0 +1,31 @@
+import React from 'react';
+
+const SIZES = { sm: 40, md: 56, lg: 88, xl: 120 };
+
+/* Sprite container with a neutral placeholder (Poké Ball silhouette) shown
+   until a real sprite `src` is supplied. `ring` tints the frame for shiny.
+   Keeps sprite art out of hand-drawn SVG — production supplies real PNGs. */
+export function SpriteSlot({ src, alt = '', size = 'md', shiny = false, style, ...rest }) {
+  const dim = SIZES[size] || SIZES.md;
+  return (
+    <div
+      style={{
+        position: 'relative', width: dim, height: dim, flex: '0 0 auto',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)',
+        border: `1.5px solid ${shiny ? 'var(--gold-400)' : 'var(--border-subtle)'}`,
+        boxShadow: shiny ? '0 0 0 3px var(--gold-100)' : 'none', overflow: 'hidden', ...style,
+      }}
+      {...rest}
+    >
+      {src
+        ? <img src={src} alt={alt} style={{ width: '82%', height: '82%', objectFit: 'contain', imageRendering: 'pixelated' }} />
+        : <svg width={dim * 0.5} height={dim * 0.5} viewBox="0 0 24 24" fill="none" stroke="var(--slate-300)" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M3 12h6" /><path d="M15 12h6" /><circle cx="12" cy="12" r="2.6" fill="var(--slate-300)" stroke="none" /></svg>}
+      {shiny && (
+        <span style={{ position: 'absolute', top: 3, right: 3, color: 'var(--gold-500)' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 6.1H20l-5 3.7 1.9 6.1-5-3.8-5 3.8L8.8 11.8 4 8.1h6.1z" /></svg>
+        </span>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,21 @@
+import React from 'react';
+
+export function Card({ elevated = false, padded = true, inset = false, as = 'div', children, style, ...rest }) {
+  const Tag = as;
+  return (
+    <Tag
+      style={{
+        background: inset ? 'var(--surface-inset)' : 'var(--surface-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-card)',
+        boxShadow: elevated ? 'var(--shadow-card)' : 'none',
+        padding: padded ? 'var(--pad-card)' : 0,
+        overflow: 'hidden',
+        ...style,
+      }}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}

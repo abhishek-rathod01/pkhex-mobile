@@ -1,0 +1,33 @@
+import React from 'react';
+
+export function Switch({ checked = false, onChange, disabled = false, label, style, ...rest }) {
+  const track = checked ? 'var(--accent)' : 'var(--slate-300)';
+  const control = (
+    <span
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => !disabled && onChange && onChange(!checked)}
+      style={{
+        position: 'relative', display: 'inline-block', width: 46, height: 28, flex: '0 0 auto',
+        background: disabled ? 'var(--slate-200)' : track, borderRadius: 'var(--radius-pill)',
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
+        transition: 'background var(--dur-base) var(--ease-standard)', ...style,
+      }}
+      {...rest}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3, width: 22, height: 22,
+        background: 'var(--slate-0)', borderRadius: '50%', boxShadow: 'var(--shadow-sm)',
+        transition: 'left var(--dur-base) var(--ease-out)',
+      }} />
+    </span>
+  );
+  if (!label) return control;
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)', cursor: disabled ? 'not-allowed' : 'pointer' }}>
+      <span style={{ font: 'var(--fw-medium) var(--text-base)/1 var(--font-body)', color: 'var(--text-primary)' }}>{label}</span>
+      {control}
+    </label>
+  );
+}

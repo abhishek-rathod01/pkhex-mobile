@@ -1,0 +1,21 @@
+:root {
+  /* ===== Spacing scale — 4px base ===== */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ===== Semantic spacing ===== */
+  --gutter-screen: 16px;      /* horizontal screen padding */
+  --gap-card: 12px;           /* between stacked cards */
+  --pad-card: 16px;           /* inside a card */
+  --gap-row: 12px;            /* between list rows */
+  --touch-min: 44px;          /* minimum touch target */
+}

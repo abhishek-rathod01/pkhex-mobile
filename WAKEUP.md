@@ -1,118 +1,126 @@
-# Wake-up summary — species + move editing (latest), Gen1/2 EV fix
+# Wake-up summary — UI reskin shipped (Task 1 of 3), Tasks 2/3 in progress
 
-Two commits landed most recently, both on 2026-07-20, both verified across
-Gen 1/5/9:
+**If you're reading this mid-run**: this file gets rewritten at the end of
+each task in the queue below. Check the "Queue status" section first to see
+what's actually done vs. still pending — don't assume this whole file
+describes finished work.
 
-- **`ec6c72d` — species + move editing** (this session, detailed below).
-- **`0861d2f` — Gen1/2 EV save-blocking bug fix** (earlier the same day).
-  Gen1/2 "EVs" are real 16-bit Stat Exp (0-65535), but the EV fields parsed
-  into a `byte` and validated against a hardcoded 252, so `byte.TryParse`
-  failed and `OnSaveChangesClicked` blocked saving *any* edit (even a
-  nickname-only one) on a Gen1/2 mon with real stat exp. Fixed by widening
-  parsing to `int` and making the EV cap generation-aware (65535 for Gen1/2,
-  252 for Gen3+), mirroring the earlier IV-cap fix. Verified on-device
-  against the real Gen1 save (MEW, all EVs 65535); full write-up in
-  `PROGRESS.md`.
+## Queue status
 
-## This session: species + move editing (`ec6c72d`)
+A 3-task overnight run was queued (user going to sleep, pre-authorized
+autonomous execution — builds/emulator/git commits handled without stopping
+for approval, per instructions in this session):
 
-Added species and move editing to the detail-page editor, behind a clear
-legality warning, round-trip verified across Gen 1/5/9 and driven once
-on-device through the real FileSaver/FilePicker. Nothing hit the "same error
-3 times, stop and log as blocked" condition; two genuine pre-existing bugs
-were found *and fixed* (not just logged) because they made the new feature
-produce broken saves.
+1. **✅ DONE, committed.** UI reskin: design system, functional buttons,
+   sprites, held items, app icon. Verified on-device across Gen1/5/9,
+   regression-free. Full detail in `PROGRESS.md`'s "UI reskin" section.
+2. **Read-only legality badge** on the detail screen via PKHeX.Core's
+   `LegalityAnalysis`, specifically tested against a Pokémon edited via the
+   species/move editor (to confirm it actually flags issues that edit
+   introduces, not just a static "looks fine" check).
+3. **Extend the design system to box view + edit forms** (box view mostly
+   already done as part of Task 1's `BoxListPage` restyle — this task is
+   about closing any remaining gaps and re-confirming consistency).
 
-## What was built (commit: see `git log`)
+Rule for this run: if the same error recurs 3× in a row on any task, stop
+immediately, log full details right here, and do **not** attempt the next
+task. Each task requires on-device verification + commit + PROGRESS.md
+update before the next one starts.
 
-`PokemonDetailPage` now edits **species** (one `Picker`) and the **four
-moves** (four `Picker`s) in addition to nickname/level/IV/EV. Species/moves
-were removed from the read-only `StatsList` (Nature/Ability stay there).
+## Task 1 — what shipped (commit: see `git log`)
 
-- Species picker bounded by `pk.MaxSpeciesID`, moves by `pk.MaxMoveID`
-  (format structural limits, not legality). Move index 0 = "(None)".
-- Save applies `pk.Species = id` then `pk.SetMoves(moves)` (the latter
-  recomputes PP - raw `Move1..4` would leave stale PP).
-- **Legality warning**: persistent orange label always shown under the
-  pickers, plus a contextual note appended to the save-success status only
-  when species/moves actually changed. **No** auto-validation/correction
-  anywhere (out of scope by request).
+Full visual reskin of every screen against a separately-authored design
+handoff bundle (`PkhexMobile Design System/design_handoff_pkhexmobile/`),
+kept strictly to "reskin + button wiring, no data-logic changes" per
+explicit instruction. Full write-up in `PROGRESS.md`; short version:
 
-## Two real bugs found via verification and fixed
+- **Design tokens → MAUI**: `Colors.xaml` (full color-token port),
+  `Tokens.xaml` (new — spacing/radii/type-scale/motion/shadow resources),
+  `Styles.xaml` (rewritten — text-role styles, 4 button variants matching
+  the design's disabled/pressed states, card/row surface styles).
+- **Fonts**: Space Grotesk/Manrope/JetBrains Mono, self-hosted as 12 static
+  weight `.ttf` files generated from Google Fonts' variable-font sources via
+  `fonttools` (no static files are published upstream anymore).
+- **Scope call, made without stopping to ask** (documented in `PROGRESS.md`
+  under "Scope decision"): the design mockup's `DetailScreen.jsx` is a
+  read-only inspector with unwired Edit/Verify/LegalityBadge affordances —
+  explicitly marked "not yet designed" in the bundle's own README. Adopting
+  that paradigm would have meant removing the app's working direct-edit
+  `Entry`/`Picker` controls to match an inert prototype. Kept the direct-edit
+  form, applied the visual language to it, did not build the inert parts.
+  An advisor consult before starting confirmed this reading of the
+  instructions.
+- **New behavior (not just style)**: Save button dirty/clean tracking per
+  design-notes.md's spec — disabled while clean, enabled the instant any
+  field changes, disabled again after a successful save. This is the one
+  actual behavior change in Task 1; everything else preserves existing
+  logic exactly.
+- **Sprites**: species icons (Dex #1–905, regular+shiny) and held-item
+  icons (933/2683 PKHeX item IDs matched by name, not by pokesprite's own
+  numbering — those don't correspond) vendored from `msikma/pokesprite`.
+  Missing sprites (Gen9 species #906+, ~65% of item IDs) fall back to a
+  placeholder glyph via a layering trick (placeholder image behind a
+  same-slot `Image` bound to the computed filename — a failed resource
+  resolution just renders nothing, so the placeholder shows through with no
+  broken-image glyph or crash). No hardcoded valid-ID list to go stale.
+- **App icon**: original Poké Ball SVG (not copied from any source), wired
+  via `MauiIcon`/`MauiSplashScreen`, plus Android `colorPrimary` etc.
+  updated so system chrome matches. README attribution note added
+  (Nintendo/Creatures Inc./GAME FREAK Inc. imagery, fan project, no
+  affiliation implied).
 
-Both affected the **pre-existing** level/IV/EV edit path too, not only the
-new code - they only surfaced now because this was the first edit that
-changes species (which makes stale stats/level obviously wrong).
+### Environment notes for this session (things that cost time — read before repeating)
 
-1. **Party stat block was never recomputed on any edit.**
-   `SaveFile.SetPartyValues` only recalculates stats when none are present
-   (`Stat_HPMax == 0`); real party mons always have stats, so the block went
-   stale. A species change kept the old species' HP; level/IV/EV edits also
-   never updated stats. (The previous session's PROGRESS claim that
-   `SetPartySlotAtIndex` recalculates the stat block was incorrect - the new
-   harness disproves it.) **Fixed** by calling `pk.ResetPartyStats()` before
-   `SetPartySlotAtIndex`, gated on a stat-affecting change so nickname-only
-   edits don't heal/clear status.
-2. **Level misread when species + level both change.** Level is stored as
-   EXP, and EXP↔level depends on the species' growth-rate group. Setting
-   level before species reinterpreted the EXP under the new rate (level-50
-   Skeledirge → level-45 Garchomp). **Fixed** by setting `pk.Species` before
-   `pk.CurrentLevel`.
+- **Background subagents and unattended permission prompts don't mix.** The
+  first `git clone`-based sprite-vendoring subagent got silently killed
+  (status "stopped by user", would not resume via `SendMessage`) — almost
+  certainly a permission prompt with nobody available to approve it in the
+  background. When the user is present, foreground work or a subagent
+  launched right before the user steps away works; a subagent that needs
+  network/shell permissions queued for *later* unattended execution is
+  risky. If starting a new overnight background job in a future session,
+  prefer giving it pre-approved, narrowly-scoped commands, or do the fetch
+  in the foreground first.
+- **A background agent's self-report can be wrong — verify before trusting
+  it.** The species-sprite subagent reported pokesprite "doesn't cover
+  Gen8/9" and stopped at Dex #809. A single direct check of
+  `data/pokemon.json` (cheap, ~30 seconds) showed contiguous coverage to
+  #905 — the agent had read an incomplete/wrong data source and under
+  delivered by 96 species. Caught before it became stale documentation;
+  redeployed a second, narrowly-scoped agent that filled exactly the gap
+  (#810–905) without redoing the first 809. Lesson: an agent's own summary
+  of *why* it stopped is a claim, not a fact — cross-check anything that
+  will drive a downstream decision (like a fallback threshold).
+- **`git clone` for a design/asset repo is far faster than per-file fetches.**
+  Both sprite subagents were instructed to shallow-clone `pokesprite` rather
+  than fetch hundreds/thousands of individual files — this was the
+  difference between ~2–3 minutes and what would have been an impractical
+  number of tool calls.
+- **UI-automation coordinate scaling**: screenshots pulled via
+  `adb shell screencap` are full device resolution (1080×2400 on this AVD);
+  the *displayed* image in tool output is downscaled (900×2000 in this
+  session) and coordinates read off the displayed image must be multiplied
+  by the scale factor (1.2 here) before use in `adb shell input tap`. Mixed
+  up scaled vs. unscaled coordinates twice this session (tapped into empty
+  space / the wrong list row) before catching it — when a tap doesn't do
+  what's expected, `adb shell uiautomator dump` + parsing `bounds="[x1,y1][x2,y2]"`
+  is the reliable way to get exact real-device coordinates, faster than
+  re-guessing from a screenshot.
+- **Deploy command**: `dotnet build PkhexMobile/PkhexMobile.csproj -f
+  net10.0-android -c Debug -t:Run` (unchanged from prior sessions — still
+  the only reliable way to both build and install/launch; bare `adb install`
+  still crashes with Fast Deployment's missing-assemblies error).
+- **XML comment gotcha**: a `<!-- ... -->` comment that echoes a CSS custom
+  property name (e.g. `--role-body`) breaks XAML parsing — literal `--`
+  anywhere inside an XML comment is invalid, not just at the boundary.
+  Caught immediately by the build (`MAUIG1001`), one-line fix.
 
-## Verification
+## What I'd do next (if the queue stops here for any reason)
 
-- **Library round-trip** (`verify/SpeciesMoveEdit/Program.cs`): Gen1
-  (Mew→Charizard), Gen5 (Serperior→Pikachu, incl. clearing 2 move slots),
-  Gen9 (Skeledirge→Garchomp), each also changing 4 moves + level. Asserts
-  species/moves/PP/`Stat_HPMax`/`Stat_Level` round-trip, Gen1 stored types
-  match the new species, and stats are genuinely recomputed (not stale). Plus
-  a **form-staleness probe** proving an out-of-range Form after a species
-  change can't crash (PersonalInfo falls back to base form). All pass;
-  originals byte-for-byte untouched.
-- **On-device** (`PkhexMobile_Emulator`, real `gen9_real.sav`): changed
-  species/move/level via the pickers, saved via the real FileSaver dialog,
-  reloaded via the real FilePicker - party + detail show the edited values.
-  Screenshots in `verify/OnDeviceSpeciesMove/screenshots/`.
-
-## Environment reminders (unchanged, still true)
-
-- Deploy Debug builds with `dotnet build PkhexMobile/PkhexMobile.csproj -f
-  net10.0-android -c Debug -t:Run`. A bare `adb install` crashes (Fast
-  Deployment). This session, a `-t:Run` that reported "up-to-date" did *not*
-  redeploy - had to `adb uninstall` first, then `-t:Run` deployed cleanly.
-- FileSaver's filename field can autocomplete to an existing file's name;
-  clear it and type a distinct name before confirming (caught again here).
-- In Git Bash, prefix `adb shell`/`adb pull` of `/sdcard/...` paths with
-  `MSYS_NO_PATHCONV=1` or the path gets mangled to a Windows path.
-
-## What I'd do next
-
-**UI / presentation polish — not yet started (likely the next focus).** None
-of this is begun, and none touches the save-parsing/editing correctness
-already verified. See the "Roadmap / not yet started" section of
-`PROGRESS.md` for detail.
-
-1. **Design system integration.** The app still ships the stock .NET MAUI
-   template chrome - the "Hello, World! / Welcome to .NET MAUI" `MainPage`
-   with the submarine image and "Click me" button, default
-   `Colors.xaml`/`Styles.xaml`, default splash. No app-specific visual
-   language has been applied to the party/box/detail screens.
-2. **Sprite integration.** Every list and the detail screen are text-only
-   today. No Pokémon box sprites, item icons, or type badges yet; no sprite
-   assets are bundled (`Resources/Images` has only the template
-   `dotnet_bot.png`), and there's no sprite-resolution path in
-   `PkmDisplayHelper`.
-3. **App icon.** `Resources/AppIcon/appicon.svg`/`appiconfg.svg` are still the
-   default MAUI icon; no custom PkhexMobile icon authored.
-
-**Editing / correctness follow-ups (deferred by design):**
-
-4. **Species/move legality checking is still explicitly deferred** - the app
-   applies edits as-is with a warning, by design. If a future pass wants it,
-   PKHeX.Core has `LegalityAnalysis`; surface results read-only, don't
-   auto-fix, and keep it opt-in.
-5. Box (PC) editing remains read-only (structural null-`parentSave` guard).
-   Box→party moves / slot swaps are still undone.
-6. Form and Ability/Nature are not user-editable yet; Form silently carries
-   over on species change (safe, base-form fallback). Editing Form would need
-   a per-species form list and is its own scope.
+Tasks 2 and 3 are next in the queue and should proceed automatically in this
+same run unless a stop condition was hit — check the top of this file for
+current status if resuming cold. If Task 2 or 3 shipped, this section and
+the "Queue status" section above will have been rewritten to reflect that;
+if you're seeing this exact paragraph, it means the run stopped after Task 1
+for some reason not captured elsewhere — check for an error log appended
+below.

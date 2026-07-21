@@ -1,0 +1,6 @@
+/* PkhexMobile webfonts — from-scratch selection (no source fonts provided).
+   Space Grotesk = display/headings + numerals with character.
+   Manrope = body/UI text, excellent legibility at small sizes.
+   JetBrains Mono = stats, IVs/EVs, IDs, hex — tabular, monospaced.
+   Served from Google Fonts CDN; swap src for self-hosted binaries in production. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');

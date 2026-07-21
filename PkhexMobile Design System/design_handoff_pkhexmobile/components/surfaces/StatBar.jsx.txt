@@ -1,0 +1,48 @@
+import React from 'react';
+
+const STAT_COLORS = {
+  hp: 'var(--stat-hp)', atk: 'var(--stat-atk)', def: 'var(--stat-def)',
+  spa: 'var(--stat-spa)', spd: 'var(--stat-spd)', spe: 'var(--stat-spe)',
+};
+
+/* Generation-aware stat row. `total` is the visual bar (base+IV+EV combined
+   or base stat, up to `max`). `iv`/`ev` are shown as small mono chips only
+   when provided — Gen 1/2 stat-exp vs modern EVs is handled by the caller
+   passing an `evMax`/`ivMax` label, not hardcoded here. */
+export function StatBar({ stat = 'hp', label, value, max = 255, iv, ev, ivMax = 31, evMax = 252, style, ...rest }) {
+  const color = STAT_COLORS[stat] || 'var(--accent)';
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minHeight: 30, ...style }} {...rest}>
+      <span style={{
+        font: 'var(--fw-bold) var(--text-2xs)/1 var(--font-body)', letterSpacing: 'var(--ls-wide)',
+        textTransform: 'uppercase', color: 'var(--text-tertiary)', width: 34, flex: '0 0 auto',
+      }}>{label || stat}</span>
+      <span style={{
+        font: 'var(--fw-semibold) var(--text-sm)/1 var(--font-mono)', color: 'var(--text-primary)',
+        width: 30, textAlign: 'right', flex: '0 0 auto',
+      }}>{value}</span>
+      <span style={{ flex: 1, height: 8, background: 'var(--stat-track)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color, borderRadius: 'var(--radius-pill)', transition: 'width var(--dur-slow) var(--ease-out)' }} />
+      </span>
+      {(iv != null || ev != null) && (
+        <span style={{ display: 'flex', gap: 4, flex: '0 0 auto' }}>
+          {iv != null && <StatChip k="IV" v={iv} max={ivMax} tone="var(--blue-500)" />}
+          {ev != null && <StatChip k={evMax > 999 ? 'SE' : 'EV'} v={ev} max={evMax} tone="var(--green-500)" />}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StatChip({ k, v, max, tone }) {
+  return (
+    <span title={`${k} ${v}/${max}`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px',
+      background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)',
+      font: 'var(--fw-semibold) var(--text-2xs)/1 var(--font-mono)', color: 'var(--text-secondary)',
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tone }} />{v}
+    </span>
+  );
+}

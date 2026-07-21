@@ -1,0 +1,40 @@
+import React, { useState } from 'react';
+
+const SIZES = { sm: 34, md: 44, lg: 52 };
+
+export function IconButton({ variant = 'ghost', size = 'md', disabled = false, label, children, onClick, style, ...rest }) {
+  const [hover, setHover] = useState(false);
+  const [active, setActive] = useState(false);
+  const dim = SIZES[size] || SIZES.md;
+  const filled = variant === 'primary';
+  const bg = filled
+    ? (hover ? 'var(--accent-hover)' : 'var(--accent)')
+    : (hover && !disabled ? 'var(--slate-100)' : (variant === 'outline' ? 'var(--surface-card)' : 'transparent'));
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => { setHover(false); setActive(false); }}
+      onMouseDown={() => setActive(true)}
+      onMouseUp={() => setActive(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: dim, height: dim, flex: '0 0 auto',
+        color: filled ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+        background: bg,
+        border: variant === 'outline' ? '1px solid var(--border-default)' : '1px solid transparent',
+        borderRadius: 'var(--radius-control)',
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+        transform: active && !disabled ? 'scale(0.92)' : 'scale(1)',
+        transition: 'background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard)',
+        ...style,
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}

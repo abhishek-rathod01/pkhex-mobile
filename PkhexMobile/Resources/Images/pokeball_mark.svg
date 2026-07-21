@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="markTopHalf">
+      <rect x="0" y="0" width="512" height="256" />
+    </clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="212" fill="#FFFFFF" />
+  <circle cx="256" cy="256" r="212" fill="#E5484D" clip-path="url(#markTopHalf)" />
+  <rect x="44" y="240" width="424" height="32" fill="#141A23" />
+  <circle cx="256" cy="256" r="56" fill="#141A23" />
+  <circle cx="256" cy="256" r="38" fill="#FFFFFF" />
+  <circle cx="256" cy="256" r="212" fill="none" stroke="#141A23" stroke-width="14" />
+</svg>

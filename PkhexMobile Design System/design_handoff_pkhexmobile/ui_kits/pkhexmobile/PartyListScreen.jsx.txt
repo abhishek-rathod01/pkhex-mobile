@@ -1,0 +1,90 @@
+/* Party list screen — scrollable roster of the current save's party. */
+const { SpriteSlot, TypeBadge, Badge, LegalityBadge, IconButton } = window.PkhexMobileDesignSystem_375f82;
+
+function PartyRow({ m, onOpen }) {
+  const I = window.PKXIcons;
+  const [press, setPress] = React.useState(false);
+  return (
+    <button
+      onClick={() => onOpen(m)}
+      onMouseDown={() => setPress(true)} onMouseUp={() => setPress(false)} onMouseLeave={() => setPress(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+        padding: 12, background: press ? 'var(--surface-sunken)' : 'var(--surface-card)',
+        border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)',
+        boxShadow: 'var(--shadow-card)', cursor: 'pointer',
+        transition: 'background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard)',
+        transform: press ? 'scale(0.99)' : 'scale(1)',
+      }}
+    >
+      <SpriteSlot size="md" shiny={m.shiny} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ font: 'var(--fw-bold) 16px/1.1 var(--font-display)', color: 'var(--text-primary)' }}>
+            {m.nick || m.species}
+          </span>
+          {m.shiny && <I.Star size={13} style={{ color: 'var(--gold-500)' }} />}
+          {m.gender === 'M' && <I.Male size={13} style={{ color: 'var(--stat-spa)' }} />}
+          {m.gender === 'F' && <I.Female size={13} style={{ color: 'var(--stat-spe)' }} />}
+          {!m.gender && <I.Genderless size={12} style={{ color: 'var(--text-tertiary)' }} />}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          {m.nick && <span style={{ font: 'var(--fw-medium) 12px/1 var(--font-body)', color: 'var(--text-tertiary)' }}>{m.species}</span>}
+          {m.types.map((t) => <TypeBadge key={t} type={t} size="sm" />)}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flex: '0 0 auto' }}>
+        <span style={{ font: 'var(--fw-bold) 13px/1 var(--font-mono)', color: 'var(--text-secondary)' }}>Lv {m.level}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {m.item
+            ? <span title={m.item} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)', font: 'var(--fw-semibold) 11px/1 var(--font-body)' }}>
+                <I.Bag size={13} />{m.item.split(' ')[0]}
+              </span>
+            : <span style={{ color: 'var(--slate-300)', font: 'var(--fw-medium) 11px/1 var(--font-body)' }}>No item</span>}
+        </div>
+      </div>
+      <LegalityBadge status={m.legality} showLabel={false} size="sm" count={m.flags} />
+    </button>
+  );
+}
+
+function PartyListScreen({ onOpen, onNav, party = window.PKX_PARTY, saveName = 'SCARLET.sav', gameName = 'Scarlet' }) {
+  const { StatusBar, BottomNav } = window.PKXChrome;
+  const I = window.PKXIcons;
+  const legalCount = party.filter((m) => m.legality === 'pass').length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-app)' }}>
+      <StatusBar />
+      <div style={{ padding: '6px 16px 12px', flex: '0 0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div>
+            <div style={{ font: 'var(--fw-medium) 12px/1 var(--font-body)', color: 'var(--text-tertiary)', letterSpacing: 'var(--ls-wide)', textTransform: 'uppercase', marginBottom: 5 }}>{gameName} · {saveName}</div>
+            <h1 style={{ margin: 0, font: 'var(--fw-bold) 27px/1 var(--font-display)', letterSpacing: 'var(--ls-tight)', color: 'var(--text-primary)' }}>Party</h1>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <IconButton variant="outline" label="Search"><I.Search size={19} /></IconButton>
+            <IconButton variant="outline" label="More"><I.More size={19} /></IconButton>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <Badge tone="neutral">{party.length}/6 slots</Badge>
+          <Badge tone="pass"><I.Sparkles size={12} /> {legalCount} legal</Badge>
+          {party.length - legalCount > 0 && <Badge tone="fail">{party.length - legalCount} to review</Badge>}
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {party.map((m) => <PartyRow key={m.id} m={m} onOpen={onOpen} />)}
+        <button style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%',
+          padding: 14, marginTop: 2, background: 'transparent', cursor: 'pointer',
+          border: '1.5px dashed var(--border-default)', borderRadius: 'var(--radius-card)',
+          color: 'var(--text-tertiary)', font: 'var(--fw-semibold) 14px/1 var(--font-body)',
+        }}>
+          <I.Plus size={18} /> Add Pokémon to party
+        </button>
+      </div>
+      <BottomNav active="party" onNav={onNav} />
+    </div>
+  );
+}
+window.PartyListScreen = PartyListScreen;

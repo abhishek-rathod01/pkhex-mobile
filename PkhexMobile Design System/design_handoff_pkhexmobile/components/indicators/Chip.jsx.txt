@@ -1,0 +1,28 @@
+import React from 'react';
+
+/* Small pill for meta facts — held item, ball, nature, ribbons count.
+   `onRemove` renders a dismiss affordance for edit contexts. */
+export function Chip({ icon, children, tone = 'neutral', onRemove, style, ...rest }) {
+  const soft = tone === 'accent';
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '5px 10px', borderRadius: 'var(--radius-pill)',
+        background: soft ? 'var(--accent-soft)' : 'var(--surface-sunken)',
+        border: `1px solid ${soft ? 'var(--accent-soft-border)' : 'var(--border-subtle)'}`,
+        color: soft ? 'var(--accent-active)' : 'var(--text-secondary)',
+        font: 'var(--fw-semibold) var(--text-sm)/1 var(--font-body)', whiteSpace: 'nowrap', ...style,
+      }}
+      {...rest}
+    >
+      {icon && <span style={{ display: 'inline-flex' }}>{icon}</span>}
+      {children}
+      {onRemove && (
+        <span onClick={onRemove} style={{ display: 'inline-flex', cursor: 'pointer', marginLeft: 1, opacity: 0.7 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </span>
+      )}
+    </span>
+  );
+}
