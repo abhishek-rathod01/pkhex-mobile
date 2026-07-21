@@ -13,5 +13,3 @@ public sealed record PartyEntryDisplay(int Slot, string SpeciesName, string Nick
     public string ItemName => PkmDisplayHelper.GetItemName(Source.HeldItem);
     public string ItemFirstWord => ItemName.Length == 0 ? string.Empty : ItemName.Split(' ')[0];
 }
-
-public sealed record StatRow(string Label, string Value);

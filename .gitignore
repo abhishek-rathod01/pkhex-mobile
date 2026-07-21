@@ -40,3 +40,8 @@ local.properties
 
 ## macOS
 .DS_Store
+
+# On-device verification output: real save files derived from personal game saves.
+# Kept locally as verification artifacts, never committed/published (contains trainer data).
+verify/**/*.sav
+verify/**/*.bin

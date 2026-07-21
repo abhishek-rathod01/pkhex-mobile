@@ -1179,3 +1179,107 @@ risk - `PartyListPage.xaml[.cs]` has a zero-line diff for this task.
   harness already proves Gen1's write-path correctness exhaustively
   (same test suite, same file, see above); the on-device pass exists to
   catch UI-specific issues, and none were found.
+
+## Form + Nature + Ability editing (2026-07-22)
+
+Extended `PokemonDetailPage`'s editor to cover **Form**, **Ability**, and
+**Nature** - previously read-only (`StatsList`, now removed entirely; the
+`StatRow` record it used is gone from `PartyEntryDisplay.cs`). Same shape
+as the species/move pattern: a `Picker` per field, applied via PKHeX.Core's
+own setter, behind the existing legality warning (text widened to name all
+five now-editable fields). The task's real substance wasn't wiring three
+pickers - it was determining, **empirically per generation**, whether each
+field's setter actually does anything, since "PID-derived on early gens"
+folklore turned out to be only half right.
+
+### What's actually editable per generation (confirmed via `verify/FormNatureAbilityEdit/Program.cs` against real saves, not assumed)
+
+| Field | Gen1/2 | Gen3 | Gen4 | Gen5+ |
+|---|---|---|---|---|
+| Form | no-op (sentinel 0, except Unown's IV/PID side-effect - not exposed) | no-op | **real**, round-trips, recomputes stats | real |
+| Ability | no concept (sentinel -1) | real to *display*, setter no-op | **real**, round-trips | real |
+| Nature | no concept (sentinel Hardy) | real to *display* (PID%25), setter no-op | no-op (contrary to "PID-derived Gen3-5" folklore, Gen4's Nature setter specifically is *still* a no-op even though Ability/Form aren't) | **real**, round-trips (confirmed independently stored as of Gen5, not just Gen6+ as PROGRESS.md's own task brief assumed) |
+
+Non-editable cases are **disabled, not hidden** - `FormPicker`/`AbilityPicker`/
+`NaturePicker` still show the correct current value (or an explicit
+"N/A"/no-concept title for Gen1/2), matching the existing Gen1/2 IV-field-
+disabling precedent, so the UI never silently accepts an edit that has no
+effect. Each picker's caption label explains *why* it's disabled inline
+(e.g. "Nature (PID-derived before Gen 5 - not directly editable, see
+PROGRESS.md)").
+
+Two things deliberately **not** wired up despite being technically
+possible:
+- **Gen3/4's `SetPIDNature` workaround.** PKHeX.Core can force a Nature by
+  rerolling the PID until it matches, but this also **changes the mon's
+  shininess** as a side effect - too surprising to hide behind a plain
+  Nature picker, so Gen3/4 Nature stays a genuine no-op rather than a
+  working-but-shiny-breaking edit.
+- **Gen1-3's Form setter for Unown.** Only ever does anything via IV/PID
+  randomization (Unown's letter is DV-derived), not a plain stored byte -
+  same "too surprising for a plain picker" call as above.
+
+### Genuine finding: Gen8+'s Mint mechanic needed explicit syncing, not just `pk.Nature = x`
+
+`PKM.LoadStats`/`ResetPartyStats` reads **`StatAlignment`** (the "Mint"
+byte, Gen8+ only) for the stat-boost calculation, not `Nature` directly -
+first pass of the harness set only `Nature` and the Gen9 stat-block
+assertion failed outright (stats didn't move at all after a Nature edit).
+Fixed: `OnSaveChangesClicked` also sets `pk.StatAlignment = newNature`
+whenever `pk.Format >= 8`, so a user picking "Adamant" gets both the
+displayed Nature *and* the stat block reflecting Adamant, not a
+legal-but-confusing original-Nature/Mint mismatch. This is the same class
+of "setter exists but something else needs to move too" bug already found
+twice before (party stat staleness, species-before-level ordering) - caught
+here by the harness asserting the *stat value*, not just the field getter,
+exactly the discipline the task's brief asked for.
+
+### Stats-affected gating
+
+`statsAffected` (drives the `ResetPartyStats()` call) now also includes
+`formChanged` and `natureChanged` - both feed `PersonalInfo.GetFormEntry`/
+the stat-boost calculation respectively, confirmed via the harness's
+before/after `Stat_ATK`/`Stat_DEF`/`Stat_SPA` dumps. `abilityChanged` is
+deliberately **excluded** - Ability affects battle mechanics, not the
+stored stat block, so including it would trigger a pointless (if harmless)
+recompute.
+
+### Verification
+
+`verify/FormNatureAbilityEdit/Program.cs` (real saves, real
+`Write()`/`SaveUtil.GetSaveFile` round-trip, original file confirmed
+untouched on disk afterward, same discipline as `EditRoundTrip`/
+`SpeciesMoveEdit`): Gen1 (no-op confirmation), Gen5 (Nature+Ability
+in-place edit, and a separate Form edit via a species switch to Giratina
+Altered/Origin to get a real form-level base-stat difference to detect),
+Gen9 (same two cases, Skeledirge -> Zygarde 50%/Complete for the form
+case) - all pass, stat-block deltas match the expected `PersonalInfo`
+tables exactly. Bonus (not required by the task, done because the real
+save files were already on hand): Gen3 (Emerald, confirms the no-op table
+row) and Gen4 (HeartGold, confirms the "Nature no-op but Ability/Form
+real" split specifically, which is the one row of the table most likely to
+be assumed wrong by pattern-matching against Gen3).
+
+On-device (`PkhexMobile_Emulator`, real touch input, screenshots in
+`verify/OnDeviceFormNatureAbility/screenshots/`, 74 frames): Gen9
+(`gen9_real.sav`) - Ability and Nature edited via the restyled Pickers,
+saved through the real FileSaver dialog, legality badge reflects the
+change; a separate pass changed Species to Squawkabilly and picked a
+different Form (color variant), saved, confirmed. Gen5 (`gen5_real.sav`)
+- Nature edited via the Picker, saved through the real FileSaver dialog,
+confirmed saved. Gen3 was loaded and its detail screen viewed to confirm
+the disabled-picker treatment renders correctly (greyed out, current
+value still shown) - no edit attempted there since Gen3 has nothing
+editable in this task per the table above.
+
+### Explicitly out of scope / deferred
+
+- No legality re-validation beyond the existing read-only badge (unchanged
+  cadence - refreshes on load/save, same as species/move edits).
+- Gen6/7 were not separately round-trip-tested (no real Gen6/7 save file
+  in the project's inventory with these specific fields probed) - the
+  Gen5/Gen9 pass brackets them and the underlying PKHeX.Core storage
+  format for Nature/Ability/Form is unchanged across Gen5-9 (all
+  independently-stored `Data[]` fields from Gen5/Gen4 onward respectively,
+  per the source reads in `PokemonDetailPage.xaml.cs`'s own comments) -
+  a reasonable inference, not a tested fact for Gen6/7 specifically.

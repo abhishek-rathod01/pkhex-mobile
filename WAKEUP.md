@@ -253,3 +253,57 @@ production code directly via `<Compile Include>`), and
 `verify/OnDeviceBoxPartyMove/screenshots/` (53 screenshots). The one-off
 export-read-back harness used to confirm the on-device round-trip was
 deleted after use, matching the `OnDeviceEvFix` convention.
+
+## Task 2 — Form/Nature/Ability editing (2026-07-22)
+
+The agent doing this task was killed mid-run by a session usage-limit cutoff
+(not a permission block, not a code failure) partway through on-device
+verification — resumed and finished by the parent session picking up its
+uncommitted working-tree state directly, rather than restarting from
+scratch. Everything the interrupted agent had written (code + both harnesses
++ 74 on-device screenshots) was reviewed and independently re-verified
+before being folded in:
+
+- **Rebuilt the app** (`dotnet build ... -f net10.0-android -c Debug`) —
+  0 warnings/errors against the agent's in-progress diff.
+- **Re-ran `verify/FormNatureAbilityEdit/Program.cs` myself** — all 6
+  cases pass (Gen1 no-op confirmation, Gen5 Nature+Ability edit, Gen5 Form
+  edit via a Giratina form switch, Gen9 Nature+Ability edit, Gen9 Form
+  edit via a Zygarde form switch, plus bonus Gen3/Gen4 real-save
+  confirmations), each with the original file confirmed byte-for-byte
+  untouched on disk afterward.
+- **Reviewed the on-device screenshot sequence** (`verify/OnDeviceFormNatureAbility/screenshots/`,
+  74 frames) — it runs cleanly through Gen9 (Ability/Nature edits, a
+  Species+Form change to Squawkabilly, real FileSaver save, legality
+  badge check) and Gen5 (Nature edit, real FileSaver save) and stops
+  cleanly at a successful Gen5 save confirmation, not mid-crash — the
+  session limit hit right after, not during, a save.
+- **Reviewed the full code diff** (`PokemonDetailPage.xaml[.cs]`,
+  `PartyEntryDisplay.cs`) line by line before trusting it. See
+  PROGRESS.md's "Form + Nature + Ability editing" section for the full
+  per-generation table and the genuine finding worth flagging here too:
+  **Gen8+'s Mint mechanic (`StatAlignment`) is a separate byte from
+  `Nature`** that `PKM.LoadStats` actually reads for the stat-boost
+  calculation — the interrupted agent's own harness caught this itself
+  (first pass set only `Nature`, the Gen9 stat-block assertion failed
+  outright), fixed it by syncing `pk.StatAlignment = newNature` whenever
+  `pk.Format >= 8`, and the fix is confirmed correct by the harness's
+  Stat_ATK/Stat_SPA before/after dumps. Also worth flagging: Gen4 turned
+  out to have a split behavior (Ability/Form real, Nature still a no-op)
+  that contradicts a same-generation-behaves-the-same assumption — caught
+  by the bonus Gen4 test the agent ran against a real HeartGold save
+  specifically because it was the row of the table most likely to be
+  assumed wrong by pattern-matching against Gen3.
+- Committed as a new commit on `master` after this review, per the
+  project's "new commit, don't amend" rule — this session didn't touch
+  anything the interrupted agent hadn't already written, only verified it
+  and completed the documentation/commit step it never reached.
+
+**Environment note:** background agents can also be terminated by a
+session/usage-limit cutoff, not just a permission prompt — a different
+failure mode than the `git clone` permission-prompt kill documented above,
+but the same recovery approach applies: check the working tree for
+salvageable in-progress work (`git status`/`git diff`) before assuming
+anything needs to be redone from scratch. In this case the interrupted
+agent's work was complete and correct; the only thing missing was the
+docs-and-commit step.

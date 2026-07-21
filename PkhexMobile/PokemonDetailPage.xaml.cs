@@ -12,6 +12,15 @@ public partial class PokemonDetailPage : ContentPage
     int ivMax = 31;
     int evMax = 252;
 
+    // Whether the Form/Ability/Nature pickers actually do anything on Write() for the currently
+    // loaded Pokemon's format - see the "Form + Nature + Ability editing" section of PROGRESS.md
+    // for the empirical, per-generation basis for each of these three booleans. False means the
+    // picker is disabled (still shows the correct current value where one exists - matches the
+    // Gen1/2 IV field disabling precedent), not hidden.
+    bool formEditable;
+    bool abilityEditable;
+    bool natureEditable;
+
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
     // edited, disabled again immediately after a successful save. isLoading suppresses the
@@ -24,6 +33,9 @@ public partial class PokemonDetailPage : ContentPage
     // ID 0 so "(None)" is selectable to clear a slot.
     readonly List<ushort> speciesIds = new();
     readonly List<ushort> moveIds = new();
+    readonly List<byte> formValues = new();
+    readonly List<int> abilityIds = new();
+    readonly List<Nature> natureValues = new();
 
     public PokemonDetailPage()
     {
@@ -51,6 +63,9 @@ public partial class PokemonDetailPage : ContentPage
         NicknameEntry.TextChanged += (_, _) => MarkDirty();
         LevelEntry.TextChanged += (_, _) => MarkDirty();
         SpeciesPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        FormPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        AbilityPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        NaturePicker.SelectedIndexChanged += (_, _) => MarkDirty();
         Move1Picker.SelectedIndexChanged += (_, _) => MarkDirty();
         Move2Picker.SelectedIndexChanged += (_, _) => MarkDirty();
         Move3Picker.SelectedIndexChanged += (_, _) => MarkDirty();
@@ -157,24 +172,16 @@ public partial class PokemonDetailPage : ContentPage
         RefreshGen12DerivedFields();
 
         PopulateSpeciesPicker(p);
+        PopulateFormPicker(p);
         PopulateMovePickers(p);
+        PopulateAbilityPicker(p);
+        PopulateNaturePicker(p);
 
         PopulateHeldItem(p);
         RefreshLegality(p);
 
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
-
-        // Nature/Ability stay read-only here: they're PID-derived on several generations
-        // (see verify/Gen3), so exposing them as free edits would be misleading. Species and
-        // moves are now editable via the pickers above, so they're no longer in this list.
-        var rows = new List<StatRow>
-        {
-            new("Nature", PkmDisplayHelper.GetNatureName(p.Nature)),
-            new("Ability", PkmDisplayHelper.GetAbilityName(p.Ability)),
-        };
-
-        StatsList.ItemsSource = rows;
     }
 
     // Sprite/name/shiny hero block - re-run after a successful save too, since species and
@@ -269,6 +276,120 @@ public partial class PokemonDetailPage : ContentPage
         // A move the current format can't represent (out of range) falls back to "(None)" rather
         // than crashing on an unfound index.
         picker.SelectedIndex = sel >= 0 ? sel : 0;
+    }
+
+    // Form: real, independently-stored, working setter starting Gen4 (PK4.Form/G8PKM.Form/PK9.Form
+    // etc. are plain Data[] byte fields) - see PROGRESS.md "Form + Nature + Ability editing" for the
+    // per-generation source reads and round-trip harness (verify/FormNatureAbilityEdit) this is
+    // based on. Gen1-3's Form setter (GBPKM.cs/G3PKM.cs) only ever does anything for Unown, via a
+    // PID/DV rejection-sampling side effect - deliberately not exposed here, disabled instead.
+    private void PopulateFormPicker(PKM p)
+    {
+        var formNames = FormConverter.GetFormList(p.Species, GameInfo.Strings.Types, GameInfo.Strings.forms, p.Context);
+
+        formValues.Clear();
+        var items = new List<string>(formNames.Length);
+        for (byte i = 0; i < formNames.Length; i++)
+        {
+            formValues.Add(i);
+            var name = formNames[i];
+            items.Add(string.IsNullOrEmpty(name) ? $"Form {i}" : name);
+        }
+        FormPicker.ItemsSource = items;
+
+        // A 1-option picker (species has no alternate forms) is disabled too - nothing to pick.
+        formEditable = p.Generation >= 4 && formValues.Count > 1;
+        FormPicker.IsEnabled = formEditable;
+        FormPicker.Title = "Select form";
+        FormCaptionLabel.Text = formEditable
+            ? "Form"
+            : p.Generation >= 4
+                ? "Form (this species has no alternate forms)"
+                : "Form (not independently editable before Gen 4 - see PROGRESS.md)";
+
+        // A stale/out-of-range Form (e.g. carried over from a species change made elsewhere) falls
+        // back to index 0 rather than crashing on an unfound index, same as the move picker fallback.
+        int sel = formValues.IndexOf(p.Form);
+        FormPicker.SelectedIndex = sel >= 0 ? sel : 0;
+    }
+
+    // Ability: real, independently-stored, working setter starting Gen4 (PK4.cs stores it at
+    // Data[0x15] even though AbilityNumber/the PID-derived slot indicator is not - see
+    // PROGRESS.md). Gen3's Ability getter is real/meaningful (PersonalInfo.GetAbility(AbilityBit))
+    // but the direct-by-ID setter is a no-op (G3PKM.cs). Gen1/2 has no Ability concept at all
+    // (sentinel -1, GBPKM.cs).
+    private void PopulateAbilityPicker(PKM p)
+    {
+        var names = GameInfo.Strings.Ability;
+        int max = Math.Min(p.MaxAbilityID, names.Count - 1);
+
+        abilityIds.Clear();
+        var items = new List<string>(max);
+        for (int id = 1; id <= max; id++)
+        {
+            abilityIds.Add(id);
+            items.Add(names[id]);
+        }
+        AbilityPicker.ItemsSource = items;
+
+        abilityEditable = p.Generation >= 4;
+        AbilityPicker.IsEnabled = abilityEditable;
+        AbilityCaptionLabel.Text = abilityEditable
+            ? "Ability"
+            : "Ability (not stored independently before Gen 4 - see PROGRESS.md)";
+
+        if (p.Generation <= 2)
+        {
+            // True sentinel (-1) - nothing meaningful to show, unlike Gen3's real derived value.
+            AbilityPicker.Title = "N/A (no Ability concept before Gen 3)";
+            AbilityPicker.SelectedIndex = -1;
+        }
+        else
+        {
+            AbilityPicker.Title = "Select ability";
+            int sel = abilityIds.IndexOf(p.Ability);
+            AbilityPicker.SelectedIndex = sel >= 0 ? sel : 0;
+        }
+    }
+
+    // Nature: real, independently-stored, working setter starting Gen5 (PK5.cs stores it at
+    // Data[0x41] - contrary to the "PID-derived Gen3-5" folklore, confirmed empirically against a
+    // real Gen5 save in verify/FormNatureAbilityEdit). Gen3/4's Nature getter is real/meaningful
+    // (PID % 25, G3PKM.cs/G4PKM.cs) but the setter is a no-op; PKHeX.Core does have a
+    // PID-rerolling workaround (SetPIDNature) but it also de-shinies the mon as a side effect,
+    // which is too surprising to wire into a plain picker - deliberately not used. Gen1/2 has no
+    // Nature concept at all (sentinel Hardy/0, GBPKM.cs).
+    private void PopulateNaturePicker(PKM p)
+    {
+        var names = GameInfo.Strings.Natures;
+        int max = Math.Min(24, names.Count - 1); // 25 real natures (Hardy..Quirky), ignore anything past
+
+        natureValues.Clear();
+        var items = new List<string>(max + 1);
+        for (int i = 0; i <= max; i++)
+        {
+            natureValues.Add((Nature)i);
+            items.Add(names[i]);
+        }
+        NaturePicker.ItemsSource = items;
+
+        natureEditable = p.Generation >= 5;
+        NaturePicker.IsEnabled = natureEditable;
+        NatureCaptionLabel.Text = natureEditable
+            ? "Nature"
+            : "Nature (PID-derived before Gen 5 - not directly editable, see PROGRESS.md)";
+
+        if (p.Generation <= 2)
+        {
+            NaturePicker.Title = "N/A (no Nature concept before Gen 3)";
+            NaturePicker.SelectedIndex = -1;
+        }
+        else
+        {
+            NaturePicker.Title = "Select nature";
+            int sel = natureValues.IndexOf(p.Nature);
+            NaturePicker.SelectedIndex = sel >= 0 ? sel : 0;
+        }
     }
 
     private void OnIvIndependentEntryTextChanged(object? sender, TextChangedEventArgs e)
@@ -376,13 +497,56 @@ public partial class PokemonDetailPage : ContentPage
             MoveIdFor(Move4Picker),
         };
 
+        // Form/Ability/Nature: only resolved (and later applied) when this generation's format
+        // actually stores the field independently - see PopulateFormPicker/PopulateAbilityPicker/
+        // PopulateNaturePicker and PROGRESS.md for the per-generation basis. When not editable the
+        // picker is disabled and its selection is never read, so the original value is left alone.
+        byte newForm = pk.Form;
+        if (formEditable)
+        {
+            if (FormPicker.SelectedIndex < 0 || FormPicker.SelectedIndex >= formValues.Count)
+            {
+                SaveStatusLabel.Text = "Select a form before saving.";
+                return;
+            }
+            newForm = formValues[FormPicker.SelectedIndex];
+        }
+
+        int newAbility = pk.Ability;
+        if (abilityEditable)
+        {
+            if (AbilityPicker.SelectedIndex < 0 || AbilityPicker.SelectedIndex >= abilityIds.Count)
+            {
+                SaveStatusLabel.Text = "Select an ability before saving.";
+                return;
+            }
+            newAbility = abilityIds[AbilityPicker.SelectedIndex];
+        }
+
+        Nature newNature = pk.Nature;
+        if (natureEditable)
+        {
+            if (NaturePicker.SelectedIndex < 0 || NaturePicker.SelectedIndex >= natureValues.Count)
+            {
+                SaveStatusLabel.Text = "Select a nature before saving.";
+                return;
+            }
+            newNature = natureValues[NaturePicker.SelectedIndex];
+        }
+
         bool speciesChanged = newSpecies != pk.Species;
+        bool formChanged = formEditable && newForm != pk.Form;
+        bool abilityChanged = abilityEditable && newAbility != pk.Ability;
+        bool natureChanged = natureEditable && newNature != pk.Nature;
         bool movesChanged = newMoves[0] != pk.Move1 || newMoves[1] != pk.Move2 ||
                             newMoves[2] != pk.Move3 || newMoves[3] != pk.Move4;
 
         // A change to any of these makes the stored party stat block (HP/Atk/.../Stat_Level)
-        // stale, so it must be recomputed below. Captured before mutation.
-        bool statsAffected = speciesChanged ||
+        // stale, so it must be recomputed below. Captured before mutation. Form and Nature both
+        // feed PKM.LoadStats (PersonalInfo.GetFormEntry and StatAlignment.ModifyStatsForAlignment
+        // respectively - confirmed empirically in verify/FormNatureAbilityEdit); Ability does not
+        // affect the stat block at all (battle-time only), so it's deliberately excluded here.
+        bool statsAffected = speciesChanged || formChanged || natureChanged ||
                              level != pk.CurrentLevel ||
                              ivHp != pk.IV_HP || ivAtk != pk.IV_ATK || ivDef != pk.IV_DEF ||
                              ivSpa != pk.IV_SPA || ivSpd != pk.IV_SPD || ivSpe != pk.IV_SPE ||
@@ -401,10 +565,30 @@ public partial class PokemonDetailPage : ContentPage
             // The species setter also updates format-specific derived fields (e.g. Gen1 internal
             // index + stored types).
             pk.Species = newSpecies;
+            if (formEditable)
+                pk.Form = newForm;
             pk.CurrentLevel = level;
             // SetMoves (not raw Move1..4) so current PP is recomputed for the new moves - setting
             // the move IDs alone would leave stale PP from the previous moves.
             pk.SetMoves(newMoves);
+
+            if (abilityEditable)
+                pk.Ability = newAbility;
+
+            if (natureEditable)
+            {
+                pk.Nature = newNature;
+                // Gen8+ (G8PKM/PA8/PA9/PK9) stores a SECOND independent nature-shaped byte,
+                // StatAlignment (the "Mint" mechanic) - PKM.LoadStats/ResetPartyStats reads
+                // StatAlignment for the stat-boost calculation, not Nature. This app has one
+                // Nature field, not two Mint-aware ones, so both are kept in sync: a user picking
+                // "Adamant" expects the displayed Nature AND the stat block to both reflect
+                // Adamant, not a legal-but-confusing Mint-vs-original mismatch. Discovered
+                // empirically in verify/FormNatureAbilityEdit (first pass only set Nature and the
+                // Gen9 stat-block assertion failed - stats didn't move at all).
+                if (pk.Format >= 8)
+                    pk.StatAlignment = newNature;
+            }
 
             pk.IV_HP = ivHp;
             pk.IV_ATK = ivAtk;
@@ -441,9 +625,10 @@ public partial class PokemonDetailPage : ContentPage
             if (result.IsSuccessful)
             {
                 // Reinforce the caveat at the moment it matters: only when the user actually
-                // changed species/moves, so a plain nickname/stat edit isn't nagged.
-                var note = (speciesChanged || movesChanged)
-                    ? " (Species/move edits are applied as-is; other tools may flag this as illegal.)"
+                // changed species/form/ability/nature/moves, so a plain nickname/stat edit isn't
+                // nagged.
+                var note = (speciesChanged || formChanged || abilityChanged || natureChanged || movesChanged)
+                    ? " (Species/form/ability/nature/move edits are applied as-is; other tools may flag this as illegal.)"
                     : string.Empty;
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
                 RefreshHero(pk);
