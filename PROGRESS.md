@@ -883,6 +883,55 @@ Driven on `PkhexMobile_Emulator`, screenshots in `verify/UIReskin/screenshots/`
 No regressions to any Task 1 functionality; this task only added the banner
 and its refresh calls.
 
+## Design-system consistency pass: box view + edit-form details (2026-07-21)
+
+Audited the box view and detail-screen edit forms against the party-list/
+detail-screen visual language established in the earlier reskin session,
+looking specifically for places the two diverged rather than adding new
+surface area (per instruction: match the established language, preserve all
+existing functionality exactly, no box editing). On-device audit (real
+`gen9_real.sav`, 30-slot box) found two concrete gaps, both fixed:
+
+1. **`BoxListPage`'s row template was missing the held-item indicator.**
+   `PartyListPage`'s row shows `Lv {level}` plus a second line - item name's
+   first word or muted "No item" - directly under it; `BoxListPage`'s row
+   only showed the level, despite both templates binding the same
+   `PartyEntryDisplay` (which already exposes `ItemFirstWord`/`HasItem`/
+   `HasNoItem` from the Task 1 reskin). Copied the exact same second-line
+   markup into `BoxListPage`'s `DataTemplate` so a box mon's held item is
+   visible in the list, not just after opening the detail screen.
+2. **`BoxListPage`'s box-selector `Picker` had no label caption above it.**
+   Every field in `PokemonDetailPage`'s edit form has an uppercase
+   `LabelCaptionStyle` label above it ("NICKNAME", "LEVEL", "SPECIES", ...);
+   the box-view's `Picker` was the one remaining input in the app without
+   one. Added a "BOX" caption and changed the Picker's placeholder text to
+   "Select box" (was "Box", which read oddly once a redundant caption sat
+   right above it).
+3. **The read-only Details (Nature/Ability) list didn't match the design's
+   `DataRow` component spec.** `DataRow.jsx` specifies right-aligned
+   semibold values and a `1px solid var(--border-subtle)` bottom divider
+   between rows (`divider=true` by default). The existing `StatsList`
+   `DataTemplate` had left-aligned plain-weight values and no divider at
+   all. Rebuilt the template to match: label left (tertiary caption),
+   value right-aligned (`ManropeSemiBold`), `BoxView` divider
+   (`BorderSubtle`, 1px) under each row. This is a `CollectionView`
+   `DataTemplate`, so the last row also gets a divider (the design shows
+   `divider={false}` on a section's final row) rather than engineering an
+   "is-last-item" binding for what is currently always exactly two rows
+   (Nature, Ability) - a deliberate, low-value tradeoff, not an oversight.
+
+No `.cs` files were touched for this task - every change is XAML template
+markup, reusing bindings/properties (`ItemFirstWord`, `HasItem`,
+`HasNoItem`, `BorderSubtle`, `LabelCaptionStyle`, `MonoMutedStyle`) that
+already existed from Tasks 1 and 2. Re-verified on-device (screenshots
+43-44 in `verify/UIReskin/screenshots/`) against `gen9_real.sav`'s 30-slot
+box: item indicators now show correctly per-row, box caption renders,
+Nature/Ability rows show right-aligned values with dividers. Also
+re-confirmed (during the same pass, screenshots 41-42) that the box→detail
+navigation path - sprite, held-item row, legality badge, hidden Save
+button - already worked correctly end-to-end from Tasks 1/2, with no
+regressions from this pass's template edits.
+
 ## Roadmap / not yet started (as of 2026-07-21, post-legality-badge)
 
 - **Box (PC) editing.** Still read-only via the structural null-`parentSave`

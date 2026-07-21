@@ -11,8 +11,9 @@
 
         <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12" Margin="0,0,0,12">
             <VerticalStackLayout Spacing="6">
+                <Label Text="Box" Style="{StaticResource LabelCaptionStyle}" />
                 <Picker x:Name="BoxPicker"
-                        Title="Box"
+                        Title="Select box"
                         SelectedIndexChanged="OnBoxSelected" />
                 <Label x:Name="HeaderLabel" Style="{StaticResource MutedStyle}" />
             </VerticalStackLayout>
@@ -53,9 +54,15 @@
                                 <Label Text="{Binding SpeciesName}" Style="{StaticResource MutedStyle}" />
                             </VerticalStackLayout>
 
-                            <Label Grid.Column="2" Text="{Binding Level, StringFormat='Lv {0}'}"
-                                   Style="{StaticResource MonoValueStyle}"
-                                   HorizontalOptions="End" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="2" Spacing="4" HorizontalOptions="End" VerticalOptions="Center">
+                                <Label Text="{Binding Level, StringFormat='Lv {0}'}" Style="{StaticResource MonoValueStyle}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Text="{Binding ItemFirstWord}" Style="{StaticResource MonoMutedStyle}"
+                                       IsVisible="{Binding HasItem}" HorizontalTextAlignment="End" />
+                                <Label Text="No item" Style="{StaticResource MonoMutedStyle}"
+                                       IsVisible="{Binding HasNoItem}"
+                                       HorizontalTextAlignment="End" />
+                            </VerticalStackLayout>
                         </Grid>
                     </Border>
                 </DataTemplate>
