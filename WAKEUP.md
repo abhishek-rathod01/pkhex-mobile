@@ -204,14 +204,20 @@ with real touch input on the emulator against `gen9_real.sav`, plus one
 Gen1 smoke swap against `gen1_real.sav` (no crash). **Drag-and-drop is
 wired identically in code** (`DragGestureRecognizer`/`DropGestureRecognizer`,
 same `PerformMove` call as the tap path) but **could not be triggered via
-`adb shell input swipe`** (two attempts, 1.2s and 2.5s duration, no crash
-either time, no move) — this is an ADB/automation limitation (synthetic
-swipes don't replicate the native long-press-drag gesture MAUI's Android
-renderer listens for), not evidence the drag code itself is wrong, but it
-means drag specifically is code-verified and manual-touch-verified-never
-in this pass — flagging honestly rather than claiming device coverage
-that wasn't actually exercised. A future session with a physical device
-or a slower manual test could close this gap; ADB alone can't.
+ADB** — tried `adb shell input swipe` (two attempts, 1.2s/2.5s duration)
+*and*, on an advisor's suggestion that a hold-then-move command might
+succeed where a synthetic swipe didn't, `adb shell input draganddrop`
+(two more attempts, 1s/3s hold — this command exists on this AVD's API
+level and is purpose-built for exactly this kind of gesture). All four
+attempts: no crash, no move, no visible drag feedback at all. This is an
+ADB/automation limitation, not evidence the drag code itself is wrong,
+but it means drag specifically is code-verified and manual-touch-verified
+*never* in this pass — **flagging this prominently rather than folding it
+into a table row**: one of the two co-equal required interaction methods
+(drag) is implemented but functionally unverified; the other (tap-to-select)
+is fully verified on real touch input across every case the task asked
+for. A future session with either a physical device or genuine manual
+interaction (not scripted ADB) is needed to close this specific gap.
 
 **Environment notes for next session (additions to the list above):**
 
