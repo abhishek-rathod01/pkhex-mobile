@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:PkhexMobile"
+             x:Class="PkhexMobile.TrainerInfoPage"
+             Title="Trainer">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+
+            <Label Text="Trainer" Style="{StaticResource ScreenTitleStyle}" Margin="0,4,0,0" />
+            <Label x:Name="SaveSummaryLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" />
+
+            <!-- Shown while the capability probe runs. The probe is a real Write() + re-read round
+                 trip (see TrainerFieldSupport), which on a Gen9 save means serializing a few MB, so
+                 it runs off the UI thread and the form stays hidden until its verdict is in rather
+                 than appearing enabled and then disabling controls under the user's finger. -->
+            <Label x:Name="ProbeStatusLabel"
+                   Text="Checking which trainer fields this save actually stores…"
+                   Style="{StaticResource MutedStyle}"
+                   LineBreakMode="WordWrap" />
+
+            <!-- The SAV3RSBox case: no trainer block in the file at all. Deliberately NOT a form of
+                 disabled controls showing PKHeX.Core's inherited defaults - OT would read "PKHeX"
+                 and every number would read 0, none of which is this trainer's data. -->
+            <Border x:Name="NotStoredBanner"
+                    IsVisible="False"
+                    BackgroundColor="{StaticResource StatusWarnBg}"
+                    Stroke="Transparent" StrokeThickness="0" Padding="12">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+                <Label x:Name="NotStoredLabel"
+                       Style="{StaticResource WarningBannerStyle}"
+                       LineBreakMode="WordWrap" />
+            </Border>
+
+            <!-- ===== Trainer identity ===== -->
+            <Border x:Name="IdentityCard" Style="{StaticResource CardBorderStyle}" IsVisible="False">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Identity" Style="{StaticResource SectionTitleStyle}" />
+
+                    <Label Text="OT name" Style="{StaticResource LabelCaptionStyle}" />
+                    <!-- MaxLength is set from sav.MaxStringLengthTrainer in code-behind. On Gen2
+                         that is not cosmetic: SAV2's OT setter passes a hardcoded maxLength of 8
+                         into a 7-byte destination buffer, so one character over the limit throws
+                         IndexOutOfRangeException straight out of a property setter. -->
+                    <Entry x:Name="OtEntry" />
+                    <Label x:Name="OtNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+
+                    <Label x:Name="TidCaptionLabel" Text="Trainer ID" Style="{StaticResource LabelCaptionStyle}" />
+                    <Entry x:Name="TidEntry" Keyboard="Numeric" />
+                    <Label x:Name="TidNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+
+                    <Label x:Name="SidCaptionLabel" Text="Secret ID" Style="{StaticResource LabelCaptionStyle}" />
+                    <Entry x:Name="SidEntry" Keyboard="Numeric" />
+                    <Label x:Name="SidNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+
+                    <Label Text="Gender" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="GenderPicker" Title="Select gender" />
+                    <Label x:Name="GenderNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+
+                    <Label Text="Language" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="LanguagePicker" Title="Select language" />
+                    <Label x:Name="LanguageNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Money + play time ===== -->
+            <Border x:Name="MoneyCard" Style="{StaticResource CardBorderStyle}" IsVisible="False">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Money &amp; play time" Style="{StaticResource SectionTitleStyle}" />
+
+                    <Label x:Name="MoneyCaptionLabel" Text="Money" Style="{StaticResource LabelCaptionStyle}" />
+                    <Entry x:Name="MoneyEntry" Keyboard="Numeric" />
+                    <Label x:Name="MoneyNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+
+                    <Label x:Name="PlayTimeCaptionLabel" Text="Play time (h : mm : ss)" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                        <Entry x:Name="HoursEntry" Grid.Column="0" Keyboard="Numeric" Placeholder="Hours" />
+                        <Entry x:Name="MinutesEntry" Grid.Column="1" Keyboard="Numeric" Placeholder="Min" />
+                        <Entry x:Name="SecondsEntry" Grid.Column="2" Keyboard="Numeric" Placeholder="Sec" />
+                    </Grid>
+                    <Label x:Name="PlayTimeNoteLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Pokedex completion (read-only) =====
+                 Reads only. SaveFile.SetSeen/SetCaught are `virtual { }` on the base and are
+                 overridden by only five save classes, so dex WRITING is a silent no-op on Gen4/5/7/8/9
+                 - out of scope by design (CAPABILITY-AUDIT.md 5.3). The getters, by contrast, are
+                 routed through each generation's own Zukan substructure and are uniform. -->
+            <Border x:Name="DexCard" Style="{StaticResource CardBorderStyle}" IsVisible="False">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Pokédex" Style="{StaticResource SectionTitleStyle}" />
+
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="12">
+                        <Label Grid.Row="0" Grid.Column="0" Text="Seen" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Label Grid.Row="0" Grid.Column="1" x:Name="DexSeenLabel" Style="{StaticResource MonoValueStyle}" HorizontalTextAlignment="End" />
+
+                        <Label Grid.Row="1" Grid.Column="0" Text="Caught" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Label Grid.Row="1" Grid.Column="1" x:Name="DexCaughtLabel" Style="{StaticResource MonoValueStyle}" HorizontalTextAlignment="End" />
+
+                        <Label Grid.Row="2" Grid.Column="0" Text="Complete" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Label Grid.Row="2" Grid.Column="1" x:Name="DexPercentLabel" Style="{StaticResource MonoValueStyle}" HorizontalTextAlignment="End" />
+                    </Grid>
+
+                    <ProgressBar x:Name="DexProgress" ProgressColor="{StaticResource Accent}" HeightRequest="6" />
+
+                    <Label Text="Read-only. Dex entries are stored per generation in incompatible layouts and PKHeX.Core's generic write path is a no-op on most of them, so this app reports the dex but never edits it."
+                           Style="{StaticResource MutedStyle}"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button x:Name="SaveChangesBtn"
+                    Text="Save Changes"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Clicked="OnSaveChangesClicked"
+                    HorizontalOptions="Fill"
+                    IsVisible="False"
+                    IsEnabled="False" />
+
+            <Label x:Name="SaveStatusLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
