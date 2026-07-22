@@ -1,365 +1,109 @@
-# Wake-up summary — overnight 3-task queue complete, all committed
+# WAKEUP — read this first
 
-All three queued tasks finished successfully, verified on-device, and
-committed. No stop conditions were hit (no error recurred 3× on any task).
-This file replaces the interim per-task version written earlier in the run.
+**Session paused deliberately at a usage-limit boundary (2026-07-22, ~01:30).**
+Agents were stopped by choice, not by failure. Everything is committed and pushed.
+Working tree is clean. `dotnet build` = **0 errors**, 7 warnings.
 
-## Queue result
+> Start here, then read `CLAUDE.md` (build commands, API traps, the recurring
+> per-generation no-op bug class, conventions). `CAPABILITY-AUDIT.md` is the
+> prioritized map of what PKHeX.Core offers vs. what the app exposes — it drives
+> the remaining roadmap. `PROGRESS.md` is the long-form feature history.
 
-| Task | Result | Commit |
+---
+
+## State right now
+
+- **Branch:** `master`, everything pushed to `github.com/abhishek-rathod01/pkhex-mobile`
+- **Working tree:** clean
+- **Build:** `dotnet build PkhexMobile/PkhexMobile.csproj -f net10.0-android -c Debug`
+  → **0 errors**, 7 warnings (all `CS8622` nullability on event handlers in the new
+  `PokemonTransferPage` — trivial, fix first thing)
+
+---
+
+## ⚠️ The three things that need doing before this work is trustworthy
+
+**1. Nothing from this session's second half is verified on-device.**
+Only one emulator exists, so on-device verification could not be parallelized. It was
+granted to the per-Pokémon editor agent (move types are on-device verified). Everything
+else — Trainer screen, box management, `.pk`/Showdown import-export, held-item editing,
+ball, friendship, EV/IV cap rework — is **library-harness verified only**. This project
+has a documented precedent (the Shell `InvalidCastException`) of a bug that appears only
+on-device and never in a build. **Run a consolidated on-device pass before trusting any
+of it.**
+
+**2. Navigation for the new pages is NOT wired.**
+To prevent four concurrent agents from clobbering shared files, all of them were barred
+from editing `MainPage.xaml` and `AppShell.xaml.cs`; the orchestrator was going to wire
+navigation in a final integration pass that never happened. So new pages exist but may be
+**unreachable from the UI**. Check what routes are registered and add entry points for:
+`TrainerInfoPage` (or whatever the trainer screen is named), `PokemonTransferPage`.
+Use the `NavigationState` static hand-off — **never** Shell's `GoToAsync` query
+dictionary (documented `InvalidCastException`; see `CLAUDE.md`).
+
+**3. `PROGRESS.md` has stale claims.** It still says Gen 9 species sprites are
+unavailable and that #911 falls back to a placeholder. **That is no longer true** — the
+full #906–1025 range was vendored (commit `200afee`). Item-icon counts are stale too.
+Correct these when convenient; several agents were appending concurrently so
+reconciliation was deferred.
+
+---
+
+## What shipped this session (all pushed)
+
+| Area | Commit(s) | State |
 |---|---|---|
-| 1. UI reskin (design system, sprites, held items, app icon, dirty/clean Save) | ✅ Done, verified Gen1/5/9 on-device | `1a7fb33` |
-| 1.5. Verification pass gating Task 2 | ✅ Done — screenshots + regression tests, no gaps found, no fixes needed before proceeding | (part of gate, no separate commit) |
-| 2. Read-only legality badge (`LegalityAnalysis`) | ✅ Done, verified it correctly flags issues introduced by species/move edits | `d1caf9f` |
-| 3. Design-system consistency: box view + edit-form details | ✅ Done, closed 3 real gaps found on-device | `20b39f5` |
+| Box↔party move/swap, drag + tap-to-select | `0cf6386`, `79300b3` | Tap path on-device verified. **Drag-and-drop is code-correct but was never verified** — ADB cannot drive it (4 attempts). Needs a human finger. |
+| Form / Nature / Ability editing | `74a8f95` | Harness-verified across Gen1/3/4/5/9 |
+| GitHub Actions CI | `2524279` | Builds PKHeX.Core + runs the 9 self-contained Gen harnesses |
+| Item icons (name-matched) | `db049cc` | 933 → 976 |
+| **Gen 9 species sprites #906–1025** | `200afee` | 240 files. **Species coverage now complete #1–1025**, regular + shiny |
+| TM/TR item icons via move→type mapping | `a7aacb4` | +173 type-colored icons |
+| Capability audit | `3b75c12` | `CAPABILITY-AUDIT.md` |
+| `CLAUDE.md` context doc | `395577b` | New — lessons learned, auto-loaded each session |
+| Move-type indicators | `795a1d5` | **On-device verified** |
+| EV/IV caps from PKHeX.Core + 510 budget | `5481cc1` | Replaced hardcoded caps (a real defect the audit found) |
+| Trainer screen + capability probe | `12aad99`, `2378298` | Proven against real saves incl. the `SAV3RSBox` `.gci` edge case |
+| Box management (rename/sort/compact/clear) | `ec5cdc9` | Capability-probed |
+| `.pk` + Showdown import/export service | `a5c2ce3`, `ba308ea` | Service + `PokemonTransferPage` |
+| Checkpoint of remaining in-flight work | `243b4c0` | Box + detail editor remainder |
 
-Working tree is clean; `dotnet build ... -c Debug` succeeds with 0
-warnings/0 errors as of the last commit. Nothing is mid-flight.
+---
 
-## Task 1 — UI reskin
+## Not started / deferred
 
-Full visual reskin of every screen against a separately-authored design
-handoff bundle (`PkhexMobile Design System/design_handoff_pkhexmobile/`),
-strictly "reskin + button wiring, no data-logic changes" per instruction.
+- **Held item editing, ball, friendship** — the per-Pokémon editor agent was stopped
+  partway through its list (it had landed move types + EV caps and was on held item).
+  Verify what actually landed in `PokemonDetailPage` before redoing anything.
+- **Pokédex completion display** — specced in the audit (§3.10), not built.
+- Everything else in `CAPABILITY-AUDIT.md` at P3/P4: met/origin data, egg status,
+  markings, bag/inventory, PP/PP-Ups, contest stats, ribbons, bulk edit, event flags,
+  Mystery Gift, QR.
+- **Auto-legalization remains explicitly OUT OF SCOPE** (standing user instruction).
 
-- **Scope call** (confirmed via an advisor consult before starting): the
-  design mockup's `DetailScreen.jsx` is a read-only inspector with unwired
-  Edit/Verify/LegalityBadge affordances, explicitly marked "not yet
-  designed" in the bundle's own README. Kept the app's working direct-edit
-  `Entry`/`Picker` form instead of replacing it with that inert paradigm;
-  applied the visual language (colors, type, spacing, radii, shadows,
-  motion) to the existing form.
-- **Design tokens → MAUI**: `Colors.xaml` (full token port), `Tokens.xaml`
-  (new — spacing/radii/type-scale/motion/shadow), `Styles.xaml` (rewritten
-  — text roles, 4 button variants with disabled/pressed states, card/row
-  surfaces). Fonts (Space Grotesk/Manrope/JetBrains Mono) self-hosted as 12
-  static-weight `.ttf` files generated via `fonttools` (Google Fonts only
-  ships variable fonts now).
-- **New behavior** (the one actual behavior change, not just style): Save
-  button dirty/clean tracking — disabled while clean, enabled on first
-  edit, disabled again after a successful save.
-- **Sprites**: species icons (Dex #1–905, regular+shiny — Gen9/SV isn't in
-  pokesprite yet) and held-item icons (933/2683 PKHeX item IDs, matched by
-  name since pokesprite's own numbering doesn't correspond to PKHeX's) from
-  `msikma/pokesprite`. Missing sprites fall back to a placeholder glyph via
-  image layering (no hardcoded valid-ID list to maintain).
-- **App icon**: original Poké Ball SVG, wired via `MauiIcon`/
-  `MauiSplashScreen`; README attribution note added.
+---
 
-**On-device regression verification** (Task 1.5, before Task 2 started):
-Gen1 (`gen1_real.sav`, MEW) — Gen1/2 IV/DV caps, derived HP, linked SpD,
-live clamp all confirmed intact, no crash. Gen5 (`gen5_real.sav`) — full
-nickname-edit → Save (dirty→enabled) → real FileSaver dialog → saved →
-button reset to disabled → reloaded party list shows the edit. Gen9
-(`gen9_real.sav`, Skeledirge) — species+move edit → save → pulled the
-exported file and read it back via a throwaway PKHeX.Core harness (deleted
-after use): `Stat_Level` and `Stat_HPMax` correctly recomputed, confirming
-the species-before-level and stale-stat-block bugs a previous session fixed
-are still fixed. No regressions found anywhere; nothing needed fixing
-before Task 2 could start.
+## Known gaps that are fine / by design
 
-## Task 2 — Read-only legality badge
+- ~1450 item IDs still show the placeholder glyph (mostly obscure items). The fallback is
+  structural — a missing image renders nothing and a placeholder shows through — so this
+  degrades gracefully and needs no valid-ID list.
+- Gen 9 sprites are front battle sprites while #1–905 are box/menu icons; mild style
+  difference, no better source exists.
+- Design system is light-theme only (no dark tokens were ever provided).
 
-Added `PokemonDetailPage.RefreshLegality`, which runs PKHeX.Core's own
-`LegalityAnalysis(pk)` directly (no reimplementation, no auto-fix) and
-displays `la.Valid` as a green "LEGAL" / red "ILLEGAL" banner with
-`la.Report()`'s human-readable text underneath. Recomputed on load and
-again after a successful save — not live per-keystroke (encounter matching
-isn't free, and the existing hero/title refresh already follows this same
-cadence).
+---
 
-**Verified the specific thing the task asked for**: a real Gen9 save mon
-(Skeledirge) showed green "LEGAL" until edited via the species Picker
-(Skeledirge→Quaxwell) and saved — the banner then correctly flipped to red
-"ILLEGAL" with a specific, itemized reason list (invalid moves for the new
-species, unmatched encounter, invalid ability, unexpected TR-learned
-flags). Also confirmed the banner correctly stays on the *stale* result
-while a field is being edited but not yet saved (by design, not a bug), and
-that `LegalityAnalysis` doesn't crash on Gen1's substantially different
-parse path (tested against `gen1_real.sav`'s MEW, which — correctly —
-showed ILLEGAL/"unable to match an encounter," since it's a hand-crafted
-test mon, not a legitimately-obtained one).
+## Process lessons that actually mattered (full versions in `CLAUDE.md` §8)
 
-## Task 3 — Design-system consistency: box view + edit forms
-
-Audited (didn't rebuild from scratch) `BoxListPage` and the detail screen's
-read-only rows against the visual language from Task 1, since box view was
-already restyled in that pass. Found and fixed 3 concrete gaps, all XAML-
-only (no `.cs` changes):
-
-1. `BoxListPage`'s row template was missing the held-item indicator that
-   `PartyListPage`'s row already had (both bind the same
-   `PartyEntryDisplay` — straight copy-paste gap).
-2. The box-selector `Picker` had no label caption above it, unlike every
-   other field in the detail form.
-3. The read-only Nature/Ability rows didn't match the design's `DataRow`
-   spec (right-aligned semibold value, bottom divider) — now they do.
-
-Box editing (moving/swapping slots) remains explicitly out of scope, as
-instructed — nothing here touches that.
-
-## Environment notes for next session (things that cost time this run — read before repeating)
-
-- **Background subagents and unattended permission prompts don't mix.** A
-  `git clone`-based sprite-vendoring subagent was silently killed early in
-  this run (status "stopped by user," would not resume via `SendMessage`)
-  — almost certainly a permission prompt with nobody available to approve
-  it. Redeploying as a fresh agent (not resuming) worked once the user was
-  back to approve prompts. If queuing background work for later unattended
-  execution, prefer pre-approved/narrowly-scoped commands.
-- **A background agent's self-report can be wrong — verify anything that
-  drives a downstream decision.** The species-sprite subagent claimed
-  pokesprite "doesn't cover Gen8/9" and stopped at Dex #809; a direct
-  30-second check of `data/pokemon.json` showed contiguous coverage to
-  #905. Caught before it became stale documentation or a wrong fallback
-  threshold in the app.
-- **UI-automation coordinate scaling**: `adb shell screencap` output is
-  full device resolution (1080×2400 on this AVD); the image as *displayed*
-  in tool output is downscaled (900×2000 this session) — multiply displayed
-  coordinates by the scale factor (1.2 here) before `adb shell input tap`.
-  When a tap doesn't land where expected, `adb shell uiautomator dump` +
-  parsing `bounds="[x1,y1][x2,y2]"` is faster and more reliable than
-  re-guessing from a screenshot.
-- **Deploy command**: `dotnet build PkhexMobile/PkhexMobile.csproj -f
-  net10.0-android -c Debug -t:Run`. A bare `adb install` still crashes
-  (Fast Deployment's missing-assemblies error). `-t:Run` sometimes reports
-  "up to date" without actually redeploying new code — if a UI change
-  doesn't show up after `-t:Run`, `adb shell am force-stop
-  com.companyname.pkhexmobile` then relaunch via `adb shell am start -n
-  com.companyname.pkhexmobile/crc64b42f7bba2754976c.MainActivity` to be
-  sure you're looking at the current build, or `adb uninstall` first.
-- **XML comment gotcha**: a `<!-- ... -->` comment that echoes a CSS custom
-  property name (e.g. `--role-body`) breaks XAML parsing — literal `--`
-  anywhere inside an XML comment is invalid, not just at the boundary.
-  Build catches it immediately (`MAUIG1001`), one-line fix.
-- **File-picker default location drifts** between runs based on where the
-  system Storage Access Framework UI was last used (Download vs. Documents
-  vs. root) — don't assume a fixed starting folder when scripting picker
-  navigation; dump the UI hierarchy and check the breadcrumb first.
-
-## What's next (not started, no blocker)
-
-- ~~**Box editing** (moving/swapping slots between boxes/party)~~ — **done,
-  see "Box/party move + swap" below.**
-- **Form/Nature/Ability editing** — still read-only (PID-derived on several
-  gens for Nature/Ability; Form has no per-species form list yet).
-- **Gen9 species sprite gap** — pokesprite has no Scarlet/Violet/Legends
-  Z-A icons yet; ~120 species (dex #906+) show the placeholder until a
-  source with Gen9 coverage is vendored.
-- **Item icon gap** — ~65% of PKHeX item IDs (mostly TM/TR and minor items)
-  have no matching pokesprite icon and show the placeholder.
-- The legality badge is read-only by design (task scope) — no "fix
-  legality" action exists or was requested.
-- **Drag-and-drop between two different boxes** — not attempted; would
-  need both boxes visible simultaneously. The tap-to-select fallback
-  (select in box A, switch the picker, tap a destination in box B) already
-  covers this case — see below.
-
-## Box/party move + swap — completed (2026-07-21)
-
-Enabled moving Pokemon between box and party slots (both directions) plus
-box-to-box moves, via drag-and-drop and a tap-to-select-then-tap-destination
-fallback, both wired into `BoxListPage` (now shows a party grid + box grid
-together, gated behind a new "Move mode" switch so the pre-existing
-tap-to-view-detail browse behavior is unchanged when the switch is off).
-Full writeup, including the guard-by-guard reasoning for the write-path
-core and the on-device verification table, is in `PROGRESS.md`'s
-"Box/party move + swap" section (2026-07-21) — this is a pointer to it,
-not a duplicate.
-
-**Sequencing that paid off:** per an advisor consult before writing any
-XAML, the data-integrity-sensitive part (`PkhexMobile/PokemonSlotMover.cs`)
-was built and proven against real Gen1/5/9 saves
-(`verify/BoxPartyMove/Program.cs`, all cases pass) *before* any grid UI
-existed — so the part with real data-loss/duplication risk was already
-verified correct before the harder-to-verify UI layer was touched.
-
-**Genuine empirical finding, not assumed:** the task's own working theory
-("a box-sourced PKM should have `Stat_HPMax == 0`, so the library's
-existing `SetPartyValues` auto-gate should already handle box→party stat
-resets for free") was verified **false for Gen9** specifically — a fresh
-`GetBoxSlotAtIndex` read on the real `pkmnscarlet_100\main` save has
-`Stat_HPMax == 12`, `PartyStatsPresent == true` even before any write.
-Gen1 and Gen5 *do* match the theory (`Stat_HPMax == 0`). Good thing the
-mover was built to call `pk.ResetPartyStats()` explicitly and
-unconditionally on every box→party transition rather than trusting the
-auto-gate — relying on the theory alone would have silently reintroduced
-the exact stale-party-stat-block bug the "Species + move editing" session
-already found and fixed once, specifically for Gen9 box→party moves.
-
-**Gap caught and closed mid-task:** the grid UI initially had no way to
-export a move to disk at all (a move only mutates the in-memory `SaveFile`
-— unlike the per-mon edit form, there's no natural "Save Changes" button on
-a slot-move screen). Caught before declaring the task done, not by a user
-report; added a dirty/clean-tracked "Export Save" button to `BoxListPage`,
-verified on-device (real FileSaver dialog, then read back the exported
-file with a throwaway harness to confirm the on-device swap round-tripped
-correctly, deleted the harness after use).
-
-**On-device (`PkhexMobile_Emulator`) vs. library-only, the usual split:**
-tap-to-select — every variant (party↔box swap, box↔box swap, cross-box
-move with picker switching mid-selection, same-slot cancel, Move-mode-off
-browse regression, Export Save + real FileSaver + read-back) — was driven
-with real touch input on the emulator against `gen9_real.sav`, plus one
-Gen1 smoke swap against `gen1_real.sav` (no crash). **Drag-and-drop is
-wired identically in code** (`DragGestureRecognizer`/`DropGestureRecognizer`,
-same `PerformMove` call as the tap path) but **could not be triggered via
-ADB** — tried `adb shell input swipe` (two attempts, 1.2s/2.5s duration)
-*and*, on an advisor's suggestion that a hold-then-move command might
-succeed where a synthetic swipe didn't, `adb shell input draganddrop`
-(two more attempts, 1s/3s hold — this command exists on this AVD's API
-level and is purpose-built for exactly this kind of gesture). All four
-attempts: no crash, no move, no visible drag feedback at all. This is an
-ADB/automation limitation, not evidence the drag code itself is wrong,
-but it means drag specifically is code-verified and manual-touch-verified
-*never* in this pass — **flagging this prominently rather than folding it
-into a table row**: one of the two co-equal required interaction methods
-(drag) is implemented but functionally unverified; the other (tap-to-select)
-is fully verified on real touch input across every case the task asked
-for. A future session with either a physical device or genuine manual
-interaction (not scripted ADB) is needed to close this specific gap.
-
-**Environment notes for next session (additions to the list above):**
-
-- **ADB tap coordinates from a Read-tool screenshot need the same 1.2×
-  scale-up as everywhere else** — several taps in this session initially
-  missed because a coordinate was read directly off the *displayed*
-  900×2000 screenshot without multiplying by the documented 1.2 factor to
-  get real 1080×2400 device coordinates. Symptom looks exactly like "the
-  app didn't respond to the tap"; always cross-check with
-  `adb shell uiautomator dump` + `bounds="[x1,y1][x2,y2]"` (those bounds
-  are already in real device coordinates, no scaling needed) before
-  concluding a UI defect from a screenshot-only read.
-- **A page's own layout can shift the coordinates of everything below
-  it between taps** — e.g. once `BoxListPage`'s status label or Export
-  button changed height/visibility, every grid cell below it moved. Prefer
-  re-dumping/re-screenshotting after any state change that could alter
-  content height, rather than reusing coordinates from an earlier
-  screenshot of the "same" page.
-- **`git status` showing commits you didn't make is expected, not an
-  error, when other agents share this working tree** — two unrelated
-  commits (a GitHub Actions CI workflow, additional vendored item icons)
-  landed on `master` mid-session from other concurrent agents, exactly as
-  this project's environment notes warned could happen. `git diff`/`git
-  log` confirmed no overlap with this task's files before committing;
-  worth the same check next time this happens rather than assuming it's
-  your own uncommitted work resurfacing.
-
-Delivered: `PkhexMobile/PokemonSlotMover.cs`, `SlotCellDisplay.cs`
-(new), `BoxListPage.xaml[.cs]` (rewritten), a `SlotCellStyle` addition to
-`Styles.xaml`, `verify/BoxPartyMove/` (kept — covers the write-path core,
-matches this project's convention of keeping harnesses that test
-production code directly via `<Compile Include>`), and
-`verify/OnDeviceBoxPartyMove/screenshots/` (53 screenshots). The one-off
-export-read-back harness used to confirm the on-device round-trip was
-deleted after use, matching the `OnDeviceEvFix` convention.
-
-## Task 2 — Form/Nature/Ability editing (2026-07-22)
-
-The agent doing this task was killed mid-run by a session usage-limit cutoff
-(not a permission block, not a code failure) partway through on-device
-verification — resumed and finished by the parent session picking up its
-uncommitted working-tree state directly, rather than restarting from
-scratch. Everything the interrupted agent had written (code + both harnesses
-+ 74 on-device screenshots) was reviewed and independently re-verified
-before being folded in:
-
-- **Rebuilt the app** (`dotnet build ... -f net10.0-android -c Debug`) —
-  0 warnings/errors against the agent's in-progress diff.
-- **Re-ran `verify/FormNatureAbilityEdit/Program.cs` myself** — all 6
-  cases pass (Gen1 no-op confirmation, Gen5 Nature+Ability edit, Gen5 Form
-  edit via a Giratina form switch, Gen9 Nature+Ability edit, Gen9 Form
-  edit via a Zygarde form switch, plus bonus Gen3/Gen4 real-save
-  confirmations), each with the original file confirmed byte-for-byte
-  untouched on disk afterward.
-- **Reviewed the on-device screenshot sequence** (`verify/OnDeviceFormNatureAbility/screenshots/`,
-  74 frames) — it runs cleanly through Gen9 (Ability/Nature edits, a
-  Species+Form change to Squawkabilly, real FileSaver save, legality
-  badge check) and Gen5 (Nature edit, real FileSaver save) and stops
-  cleanly at a successful Gen5 save confirmation, not mid-crash — the
-  session limit hit right after, not during, a save.
-- **Reviewed the full code diff** (`PokemonDetailPage.xaml[.cs]`,
-  `PartyEntryDisplay.cs`) line by line before trusting it. See
-  PROGRESS.md's "Form + Nature + Ability editing" section for the full
-  per-generation table and the genuine finding worth flagging here too:
-  **Gen8+'s Mint mechanic (`StatAlignment`) is a separate byte from
-  `Nature`** that `PKM.LoadStats` actually reads for the stat-boost
-  calculation — the interrupted agent's own harness caught this itself
-  (first pass set only `Nature`, the Gen9 stat-block assertion failed
-  outright), fixed it by syncing `pk.StatAlignment = newNature` whenever
-  `pk.Format >= 8`, and the fix is confirmed correct by the harness's
-  Stat_ATK/Stat_SPA before/after dumps. Also worth flagging: Gen4 turned
-  out to have a split behavior (Ability/Form real, Nature still a no-op)
-  that contradicts a same-generation-behaves-the-same assumption — caught
-  by the bonus Gen4 test the agent ran against a real HeartGold save
-  specifically because it was the row of the table most likely to be
-  assumed wrong by pattern-matching against Gen3.
-- Committed as a new commit on `master` after this review, per the
-  project's "new commit, don't amend" rule — this session didn't touch
-  anything the interrupted agent hadn't already written, only verified it
-  and completed the documentation/commit step it never reached.
-
-**Environment note:** background agents can also be terminated by a
-session/usage-limit cutoff, not just a permission prompt — a different
-failure mode than the `git clone` permission-prompt kill documented above,
-but the same recovery approach applies: check the working tree for
-salvageable in-progress work (`git status`/`git diff`) before assuming
-anything needs to be redone from scratch. In this case the interrupted
-agent's work was complete and correct; the only thing missing was the
-docs-and-commit step.
-
-## Detail-screen editor expansion (2026-07-22) — IN PROGRESS, resume here
-
-Working a 5-item queue against `CAPABILITY-AUDIT.md`. **Everything claimed
-done below is committed** — this section is written incrementally precisely so
-a usage-limit cutoff can't leave the next session guessing.
-
-Owned files this pass: `PkhexMobile/PokemonDetailPage.xaml[.cs]`,
-`PkhexMobile/Resources/Styles/Styles.xaml`, `verify/**`. `MainPage.*`,
-`AppShell.*`, `BoxListPage.*` belong to other agents and were **not touched**.
-
-| # | Item | State | Commit |
-|---|---|---|---|
-| 1 | Move-type indicators (finish + verify the rescued `3b75c12` work) | ✅ done, harness + on-device Gen1/Gen9 | `795a1d5` |
-| 2 | EV cap defect — `pk.MaxEV`/`pk.MaxIV` (audit §4.1) | ✅ done, harness all-pass | `5481cc1` |
-| 3 | Held item **editing** (audit §3.3) | in progress | — |
-| 4 | Ball (audit §3.7) | not started | — |
-| 5 | Friendship (audit §3.6) | not started | — |
-
-**Build bar holds:** `dotnet build PkhexMobile/PkhexMobile.csproj -f
-net10.0-android -c Debug` → 0 errors. The single warning present is
-`BoxManagement.cs(24,24) CS1574` (unresolved `<see cref="Sort"/>`), which
-belongs to **another agent's file**, not this pass — deliberately not fixed,
-since that file isn't mine to touch.
-
-**Two findings worth carrying forward regardless of what happens next:**
-
-1. **`CAPABILITY-AUDIT.md` §4.1's recommendation is internally contradictory**
-   and should not be followed literally. It says to use `pk.GetMaximumEV(i)` as
-   the EV field cap to fix the Gen3-5 under-cap — but `CommonEdits.cs:336`
-   clamps that function's result to `EffortValues.Max252` regardless of
-   format, so it *re-imposes* the exact 252 ceiling. Verified empirically on a
-   real Gen3 save with all EVs zeroed: `GetMaximumEV(ATK)` returns 252 while
-   `pk.MaxEV` is 255. Correct split (now shipped): field cap = `pk.MaxEV`,
-   510-budget = an advisory caption. Full reasoning in PROGRESS.md.
-2. **Gen3 has a different item ID space too, not just Gen2.** The audit warns
-   only about Gen2 (`PK2.SpriteItem => GetItemFuture2`), but `PK3`/`CK3`/`XK3`
-   all override `SpriteItem => ItemConverter.GetItemFuture3` as well. Any
-   held-item sprite/name lookup must route through `pk.SpriteItem`, and any
-   item *picker* must be built from
-   `GameInfo.Strings.GetItemStrings(pk.Context)` — the modern
-   `GameInfo.Strings.Item` list is the wrong ID space for Gen1-3 and Gen4/8b/9
-   variants.
-
-**Shared harness:** `verify/DetailFieldEdits/` covers items 2-5 (part A = EV/IV
-caps, further parts appended per item). Run with
-`dotnet run --project verify/DetailFieldEdits/DetailFieldEdits.csproj`;
-exit code 0 = all pass. It clones byte arrays before `SaveUtil.GetSaveFile`
-and re-verifies every fixture save is byte-for-byte untouched on disk.
-
-**On-device screenshots:** `verify/OnDeviceDetailExpansion/screenshots/`.
-Emulator ADB helper used this pass (dump text nodes + real tap coords, no 1.2×
-scaling needed since `uiautomator` bounds are already device coords) is worth
-recreating: `adb shell uiautomator dump /sdcard/ui.xml` then parse
-`text="..." ... bounds="[x1,y1][x2,y2]"`. Note Git Bash mangles `/sdcard/...`
-paths — prefix adb calls with `MSYS_NO_PATHCONV=1`.
+- **Push early.** A usage limit killed 5 agents mid-run today. Because everything had been
+  pushed minutes before, nothing was lost. Files on disk survive a cutoff; the real danger
+  is several agents' *uncommitted* edits tangling in one shared tree.
+- **Commit incrementally, one commit per feature.** This is why the second wave lost
+  nothing — 7 commits were already banked when the pause came.
+- **Assign disjoint file ownership** and let the orchestrator wire shared files. This
+  worked; the cost is item #2 above (nav wiring left undone).
+- **Verify subagent self-reports.** Two separate agents confidently reported Gen 9 sprites
+  as unavailable anywhere. Both were wrong — a direct check found all 120 species. Always
+  re-check claims that drive a downstream decision.
+- **On-device verification can't be parallelized** — one emulator.
