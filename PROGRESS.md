@@ -1586,3 +1586,107 @@ only the held-item claim in the prior handoff was wrong.
 - **"Not started / deferred" list**: held-item editing removed (see
   "Bonus finding" above); ball and friendship confirmed still absent by
   grepping `PokemonDetailPage.xaml.cs` for any trace of them (none found).
+
+## Pokedex browse/detail screens + reference data assembly (2026-07-23)
+
+Two parallel tracks: Track A (Haiku subagent, data assembly only) and Track B
+(this session, main thread, Pokedex UI). Both landed on `master`; Track A's
+commit unintentionally landed directly on `master` rather than its isolated
+worktree branch (a tooling gap, not a content problem - see "Worktree
+isolation gap" below), but its diff was clean and additive-only, so no
+conflict resulted with Track B's concurrent edits.
+
+### Track A: Pokedex-manifest.json + item-info.md (commit `f23d225`)
+
+- `Pokedex-manifest.json` (322K): all 1025 species (#1-1025), PokeAPI-sourced
+  name/generation/types/abilities, plus sprite paths pointing at the
+  already-vendored `Resources/Images/species/spr_NNNN.png` files (no
+  re-fetching - species sprite coverage was already complete per this file's
+  "UI reskin" section above).
+- `item-info.md` (160K): 1482 PokeAPI items matched to PKHeX item IDs by
+  normalized name, each with effect text and sprite path. 236 new icons
+  vendored into `Resources/Images/items/item_NNNN.png` (PKHeX ID space,
+  matching the existing convention - not PokeAPI's numbering), bringing item
+  icon coverage from 1149/2684 to 1385/2684.
+- Neither manifest is currently wired into the shipped UI - Track B built the
+  Pokedex screens directly against PKHeX.Core's own data (below) rather than
+  these PokeAPI-sourced files, since PKHeX.Core already had everything needed
+  and is the more authoritative/faster source for an app already built on it.
+  The manifests remain available on disk for a future feature that
+  specifically needs PokeAPI's framing (e.g. flavor text, in-game location
+  data) that PKHeX.Core doesn't carry.
+
+### Track B: PokedexListPage + PokedexDetailPage (commit `954d49a`)
+
+Reference-only Pokedex, reachable from a new "Pokedex" button on `MainPage`
+(no save file required, unlike every other nav button there) - `PokedexService.cs`
+is the data layer, sourcing everything from PKHeX.Core directly:
+
+- **Species/types/abilities/base stats**: `PersonalTable.SV.GetFormEntry` -
+  chosen because SV's table covers the full National Dex `#1-1025` regardless
+  of catchability in Scarlet/Violet specifically (format conversion needs
+  stat data for every species), so it's one complete source instead of
+  per-generation branching.
+- **Forms (Mega Evolution, Gigantamax, regional forms)**: `FormConverter.GetFormList`
+  is context-gated to match real game rules - Mega Evolution doesn't exist in
+  Scarlet/Violet, Gigantamax only exists in Sword/Shield, so no single
+  `EntityContext` returns the union of every form a species has ever had.
+  Queried across one context per era (`Gen6`/`Gen7`/`Gen7b`/`Gen8`/`Gen8a`/
+  `Gen8b`/`Gen9`/`Gen9a`) and de-duplicated by name. Confirmed on-device:
+  Charizard's Forms card lists Mega X/Mega Y/Gmax; a single-context query
+  (originally just `Gen9`) showed none of them, since Gen9's context has
+  `IsMegaContext == false` and isn't `>= 8` in the branches that gate Gmax -
+  this was caught and fixed during on-device verification, not assumed correct
+  from a build pass.
+- **Evolution chain**: `EvolutionTree.Evolves9` (Scarlet/Violet's tree, the
+  most current), root found via `EvolutionNetwork.GetBaseSpeciesForm`, then
+  walked forward via `IEvolutionForward.GetEvolutions`/`GetForward` to capture
+  every branch (this is what makes Eevee's 8-way branch and per-form
+  branches like regional evolution lines work without special-casing them).
+  Each edge's `EvolutionMethod` is rendered into a human-readable caption by a
+  hand-written `EvolutionType` switch in `PokedexService.DescribeMethod` (no
+  such string-formatter exists in PKHeX.Core to reuse). Item-based methods
+  (`UseItem`/`TradeHeldItem`/etc.) treat `EvolutionMethod.Argument` as a
+  PKHeX item ID and cross-reference it via the existing `SpriteHelper
+  .ItemSpriteFile`/`PkmDisplayHelper.GetItemName` - confirmed correct
+  on-device against Eevee's full 8-evolution chain (Leaf/Ice/Thunder/Water/
+  Fire Stone icons and names all matched real game data, alongside the
+  friendship/affection-based branches which correctly show no item icon).
+- **Navigation**: species ID passed as a plain query-string int
+  (`PokedexDetailPage?speciesId=6`), not the `NavigationState` static
+  hand-off the rest of the app uses for `SaveFile`/`PKM` objects - safe here
+  because CLAUDE.md's Shell `InvalidCastException` trap only applies to
+  non-`IConvertible` types; `ushort`/`int` are `IConvertible` and survive
+  Shell's query-dictionary coercion.
+
+Verified on-device (`PkhexMobile_Emulator`, no loaded save required): list
+screen shows "1025 of 1025 species", search-by-name and search-by-dex-number
+both filter correctly (`Eevee` -> `1 of 1025 species` -> #0133), generation
+filter picker populates Gen 1-9; Charizard's detail screen matches real
+Bulbapedia data exactly (Fire/Flying, Blaze/Solar Power hidden, base stats
+78/84/78/109/85/100 = 534, Charmander -> Charmeleon Lv.16 -> Charizard Lv.36).
+
+### Worktree isolation gap (process note, not a code bug)
+
+Track A was spawned with `isolation: "worktree"` specifically so its
+data-fetch-and-commit cycle couldn't collide with Track B's concurrent edits
+on `master` (per `CLAUDE.md` §8's shared-file collision warning). The
+worktree was created correctly (`git worktree list` showed it, tracking
+branch `worktree-agent-*`), but the agent's actual `git commit` ran against
+whichever branch the *main* repo directory had checked out (`master`) rather
+than the worktree's own branch - the worktree branch never advanced past its
+creation point. Confirmed via `git reflog show <worktree-branch>` (one entry:
+"Created from origin/master") versus `git reflog show master` (Track A's
+commit appears as master's very next entry). No harm resulted only because
+Track A's diff was clean and additive (manifests + new icon files, zero
+overlap with Track B's files) - a future session relying on worktree
+isolation for a track whose diff *does* overlap with concurrent work should
+verify with `git log <worktree-branch>` that commits actually landed there
+before assuming isolation held.
+
+The empty/stale worktree and its unused branch (zero unique commits, a
+strict ancestor of `master`) were removed after verification
+(`git worktree remove` + manual directory cleanup, since its `.git` pointer
+file referenced a path from the agent's own execution environment that
+didn't resolve on this host - `git worktree prune` handled the stale
+administrative state).
