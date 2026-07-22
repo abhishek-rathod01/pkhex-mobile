@@ -360,7 +360,7 @@ public partial class BoxListPage : ContentPage
         BoxGrid.IsVisible = !visible;
         ManageBtn.Text = visible ? "Done" : "Manage";
         if (visible)
-            RefreshManagePanel();
+            RefreshManagePanel(); // forces its own re-measure at the end - see there for why
     }
 
     // Applies every capability probe to the controls. The rule throughout: a control the save can't
@@ -423,6 +423,15 @@ public partial class BoxListPage : ContentPage
         WallpaperNoticeLabel.Text = wallpaper is null
             ? "This game has no per-box wallpapers."
             : "Read-only: PKHeX.Core exposes no valid wallpaper range to check an edit against.";
+
+        // Real on-device bug, confirmed via uiautomator + manual scroll testing: the Android
+        // renderer can collapse this ScrollView's content to near-zero height whenever anything
+        // inside it changes text/visibility - not just on the initial IsVisible toggle in
+        // SetManagePanelVisible, but again after Sort/Rename/Clear re-run this same method and
+        // change label text lengths. The Rename and Box tools cards became permanently unreachable
+        // (existed in the accessibility tree with degenerate bounds, never actually scrollable into
+        // view) until forcing a fresh measure pass here, on every refresh - not just the first one.
+        ManagePanel.InvalidateMeasure();
     }
 
     private async void OnRenameClicked(object? sender, EventArgs e)
