@@ -129,5 +129,30 @@ foreach (var ctx in Enum.GetValues<EntityContext>())
 }
 
 Console.WriteLine();
+Console.WriteLine("=== 6. Chip palette alignment: PokemonDetailPage.TypeColorKeys vs Types[] ===");
+Console.WriteLine("  Sections 3-5 only prove the type NAME is right; the chip's COLOUR comes from the");
+Console.WriteLine("  app's own TypeColorKeys[type] array, and nothing above checks the two agree. If they");
+Console.WriteLine("  ever diverged, a chip would read \"FIRE\" while painting Steel's colour and every");
+Console.WriteLine("  check above would still pass. This pins PKHeX's type-byte ORDER to the exact 18");
+Console.WriteLine("  English names the app indexes its Colors.xaml Type* tokens by. Kept as a literal");
+Console.WriteLine("  copy because the app array lives in a MAUI/net10.0-android assembly this net10.0");
+Console.WriteLine("  harness cannot reference - so this asserts the contract, not the copy.");
+string[] appTypeColorKeys =
+[
+    "Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel",
+    "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark", "Fairy",
+];
+for (int i = 0; i < appTypeColorKeys.Length; i++)
+{
+    Check(ref allPass, types[i] == appTypeColorKeys[i],
+        $"TypeColorKeys[{i}] matches Types[{i}]", $"app=\"{appTypeColorKeys[i]}\" vs PKHeX=\"{types[i]}\"");
+}
+// The app falls back to "Normal" for anything past the palette; confirm the only such byte is
+// Stellar, which section 5 already proved no move can ever be.
+Check(ref allPass, types.Count == appTypeColorKeys.Length + 1 && types[18] == "Stellar",
+    "the single unpalletted type byte is Stellar (unreachable by any move, see section 5)",
+    $"Types.Count={types.Count}, Types[18]=\"{types[types.Count - 1]}\"");
+
+Console.WriteLine();
 Console.WriteLine(allPass ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED");
 return allPass ? 0 : 1;

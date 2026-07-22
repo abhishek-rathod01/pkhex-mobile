@@ -1283,3 +1283,92 @@ editable in this task per the table above.
   independently-stored `Data[]` fields from Gen5/Gen4 onward respectively,
   per the source reads in `PokemonDetailPage.xaml.cs`'s own comments) -
   a reasonable inference, not a tested fact for Gen6/7 specifically.
+
+## Move type indicators on the detail screen (2026-07-22)
+
+Each of the four move rows now leads with a solid, type-coloured chip
+(the design bundle's `TypeBadge` in its "solid" variant, at the fixed width
+`DetailScreen.jsx`'s own `MoveRow` uses so the four rows align in a column).
+Display only - nothing here reads or writes the underlying `PKM` beyond
+`MoveInfo.GetType`.
+
+**Provenance note:** the code for this landed as part of commit `3b75c12`
+("WIP: rescue in-flight agent work interrupted by a session usage-limit
+cutoff"). The agent that wrote it was cut off *mid on-device verification*
+and never wrote this section. This pass reviewed the code, added the one
+assertion it was missing (below), and completed the interrupted on-device
+verification - it did not rewrite the feature.
+
+### Three correctness traps, all handled and all pinned by the harness
+
+1. **Context-aware typing, not a hardcoded context.** The type comes from
+   `MoveInfo.GetType(move, pk.Context)`. Several moves changed type between
+   generations, so a Gen1 Pokémon's Gust/Bite/Karate Chop/Sand Attack must
+   read *Normal* (their Gen1 typing) and pre-Gen6 Charm/Moonlight/Sweet Kiss
+   likewise. A hardcoded modern context would silently mislabel every one of
+   them.
+2. **The empty slot is detected from the move ID, never the type byte.**
+   `MoveInfo.GetType(0, ctx)` returns `0` in *every* context - indistinguishable
+   from a genuine Normal-type move - so branching on the type byte would paint
+   a cleared slot with a bogus "NORMAL" chip. Move ID `0` gets a neutral
+   placeholder chip (`—` on `SurfaceSunken`) rather than being hidden, so
+   clearing a move doesn't shift the row's layout.
+3. **PKHeX's type-byte order is not the design bundle's type order.**
+   `GameInfo.Strings.Types` starts Normal/Fighting/Flying/Poison; the bundle's
+   `TypeBadge.jsx` list starts Normal/Fire/Water/Electric. Indexing one by the
+   other would mis-colour almost every chip (Fighting would render as Fire).
+   The app's `TypeColorKeys` array is therefore written in PKHeX's own order,
+   with hardcoded English keys so the colour lookup is independent of UI
+   language (a localized `Types[9]` of "Feu" would never resolve `TypeFire`).
+
+### The assertion the interrupted agent's harness was missing
+
+`verify/MoveTypes/Program.cs` sections 3-5 prove the type *name* is right, but
+the chip's *colour* comes from the app's own `TypeColorKeys[type]` array and
+nothing asserted the two agree. If they ever diverged, a chip would read
+"FIRE" while painting Steel's colour and every existing check would still
+pass. Added as section 6: `TypeColorKeys[i] == Types[i]` name-for-name for
+i=0..17, plus a check that the single unpalletted byte is `Types[18]`
+"Stellar". Kept as a literal copy of the app array because that array lives in
+a `net10.0-android` MAUI assembly this `net10.0` harness cannot reference - so
+section 6 asserts the *contract* (PKHeX's type-byte ordering), not the copy.
+
+All 6 sections pass, including the pre-existing finding worth restating:
+across every `EntityContext`'s full move-type table the maximum type byte is
+17 (Fairy), so `Types[18]` "Stellar" - the Gen9 Terastal type, which has no
+design token - is **unreachable by any move in any generation**. The app's
+`Normal` fallback for out-of-palette bytes is therefore dead code by
+construction, not a latent wrong-colour bug.
+
+### Dropdown rows carry the type too
+
+MAUI renders `Picker` dropdown rows as plain strings and cannot host a styled
+view, so the chip can only cover the *collapsed* state - while the open
+dropdown (choosing among ~900 moves) is exactly where the type matters most.
+The type is appended to the item text as a `"(Type)"` suffix there instead.
+Purely cosmetic: `MoveIdFor` resolves a selection through `moveIds` by index,
+never by parsing the text.
+
+### On-device verification (`PkhexMobile_Emulator`, real touch input)
+
+Screenshots in `verify/OnDeviceDetailExpansion/screenshots/`. This is the half
+the interrupted agent never reached.
+
+- **Gen1** (`gen1_real.sav`, party Blastoise): chips render ICE / WATER /
+  NORMAL / GROUND against the correct palette colours. Then the actual point
+  of trap 1 - changed move 3 to **Bite** via the Picker and the chip rendered
+  **NORMAL**, not Dark. Bite is Normal-type only in Gen1; a hardcoded modern
+  context would have shown DARK here. The dropdown itself also listed
+  "Bite (Normal)" and "Karate Chop (Normal)", same Gen1 typing.
+- **Gen1 empty slot**: cleared move 4 to `(None)` - the chip became the
+  neutral grey `—` placeholder with the row layout unchanged, confirming trap
+  2 on real input rather than only in the harness.
+- **Gen9** (`gen9_real.sav`, party Skeledirge): FIRE / GHOST / DARK / GHOST,
+  again matching the palette, on a save whose party+boxes span all 18 type
+  bytes per the harness.
+- Save button dirty/clean tracking still behaves correctly around the chip
+  refresh: disabled on a fresh load, enabled the instant a move Picker
+  changed. (This is why the chip refresh and `MarkDirty` are combined in one
+  `OnMoveSelectionChanged` handler rather than stacked as two subscriptions -
+  the chip must repaint during `LoadPokemon`'s programmatic population, while
+  `MarkDirty` must stay suppressed by `isLoading` for exactly that window.)
