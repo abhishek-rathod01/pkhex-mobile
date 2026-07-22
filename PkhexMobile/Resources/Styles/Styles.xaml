@@ -119,6 +119,46 @@
         <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
     </Style>
 
+    <!-- Per-move legality dot: same pass/fail colour language as LegalityBadge above, but a small
+         fixed-size circle rather than a pill, so it sits as a third column next to each move's type
+         chip + Picker without competing for width. Sourced from LegalityAnalysis.Info.Moves[i] -
+         see PokemonDetailPage.RefreshLegality - not a separate re-implementation of legality. -->
+    <Style x:Key="MoveLegalityDotPassStyle" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusPassBg}" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="WidthRequest" Value="28" />
+        <Setter Property="HeightRequest" Value="28" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="StrokeShape">
+            <Setter.Value>
+                <RoundRectangle CornerRadius="999" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="MoveLegalityDotFailStyle" TargetType="Border" BasedOn="{StaticResource MoveLegalityDotPassStyle}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusFailBg}" />
+    </Style>
+    <Style x:Key="MoveLegalityDotLabelPassStyle" TargetType="Label">
+        <Setter Property="FontFamily" Value="ManropeBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextSm}" />
+        <Setter Property="TextColor" Value="{StaticResource StatusPassFg}" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <Style x:Key="MoveLegalityDotLabelFailStyle" TargetType="Label" BasedOn="{StaticResource MoveLegalityDotLabelPassStyle}">
+        <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
+    </Style>
+    <!-- Only ever shown for an invalid move (see RefreshLegality) - no Pass variant needed. -->
+    <Style x:Key="MoveLegalityCaptionStyle" TargetType="Label">
+        <Setter Property="FontFamily" Value="ManropeMedium" />
+        <Setter Property="FontSize" Value="{StaticResource Text2xs}" />
+        <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
     <!-- TypeBadge (components/indicators/TypeBadge.jsx), in the "solid" variant and at the fixed
          width the bundle's own MoveRow uses it at (ui_kits/pkhexmobile/DetailScreen.jsx: solid,
          size="sm", fixed-width, centred, leading the move name) so the four move rows align in a

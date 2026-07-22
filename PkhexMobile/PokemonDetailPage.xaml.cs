@@ -377,6 +377,48 @@ public partial class PokemonDetailPage : ContentPage
 
         LegalityBadgeLabel.Text = la.Valid ? "LEGAL" : "ILLEGAL";
         LegalityMessageLabel.Text = la.Report();
+
+        // Per-move breakdown, reusing this SAME LegalityAnalysis instance rather than constructing a
+        // second one - la.Info.Moves[i] is the library's own per-slot verdict (move-learn-method
+        // matching against the resolved encounter), not a re-implementation. Same refresh cadence as
+        // the banner above (load + after save, never per-keystroke - LegalityAnalysis does full
+        // encounter matching, which isn't free).
+        var ctx = LegalityLocalizationContext.Create(la);
+        var moves = la.Info.Moves;
+        RefreshMoveLegality(Move1LegalityDot, Move1LegalityGlyph, Move1LegalityCaption, moves, 0, p.Move1, ctx);
+        RefreshMoveLegality(Move2LegalityDot, Move2LegalityGlyph, Move2LegalityCaption, moves, 1, p.Move2, ctx);
+        RefreshMoveLegality(Move3LegalityDot, Move3LegalityGlyph, Move3LegalityCaption, moves, 2, p.Move3, ctx);
+        RefreshMoveLegality(Move4LegalityDot, Move4LegalityGlyph, Move4LegalityCaption, moves, 3, p.Move4, ctx);
+    }
+
+    // One move slot's pass/fail dot + (fail-only) reason caption. moves.Length can be less than 4 on
+    // formats with fewer move slots (none currently reach this UI, but MoveResult[] is not
+    // fixed-length by contract) - index-guarded rather than assumed.
+    private static void RefreshMoveLegality(Border dot, Label glyph, Label caption, MoveResult[] moves, int index, ushort moveId, in LegalityLocalizationContext ctx)
+    {
+        var resources = Application.Current!.Resources;
+
+        // Cleared slot: same neutral treatment as the type chip (RefreshMoveTypeChip) - a "valid
+        // empty slot" checkmark would read as a real verdict on a move that isn't there at all.
+        if (moveId == 0 || index >= moves.Length)
+        {
+            dot.IsVisible = false;
+            caption.IsVisible = false;
+            return;
+        }
+
+        var result = moves[index];
+        dot.IsVisible = true;
+        var suffix = result.Valid ? "Pass" : "Fail";
+        dot.Style = (Style)resources[$"MoveLegalityDot{suffix}Style"];
+        glyph.Style = (Style)resources[$"MoveLegalityDotLabel{suffix}Style"];
+        glyph.Text = result.Valid ? "✓" : "✕"; // check / cross
+
+        // The reason THIS move is flagged illegal, not just that it is - e.g. "Unobtainable" for a
+        // move this encounter can't produce, or "Expect <move>" when the library knows what should be
+        // there instead.
+        caption.Text = result.Valid ? string.Empty : result.Summary(ctx);
+        caption.IsVisible = !result.Valid && !string.IsNullOrEmpty(caption.Text);
     }
 
     private void PopulateSpeciesPicker(PKM p)

@@ -113,30 +113,54 @@
                          sibling of the Picker rather than inside it because MAUI renders Picker dropdown
                          rows as plain strings and cannot host a styled view; the type is carried into the
                          dropdown as a "(Type)" suffix on the item text instead - see PopulateMovePickers. -->
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <Border x:Name="Move1TypeChip" Style="{StaticResource TypeChipBorderStyle}">
-                            <Label x:Name="Move1TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
-                        </Border>
-                        <Picker Grid.Column="1" x:Name="Move1Picker" Title="Move 1" />
-                    </Grid>
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <Border x:Name="Move2TypeChip" Style="{StaticResource TypeChipBorderStyle}">
-                            <Label x:Name="Move2TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
-                        </Border>
-                        <Picker Grid.Column="1" x:Name="Move2Picker" Title="Move 2" />
-                    </Grid>
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <Border x:Name="Move3TypeChip" Style="{StaticResource TypeChipBorderStyle}">
-                            <Label x:Name="Move3TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
-                        </Border>
-                        <Picker Grid.Column="1" x:Name="Move3Picker" Title="Move 3" />
-                    </Grid>
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <Border x:Name="Move4TypeChip" Style="{StaticResource TypeChipBorderStyle}">
-                            <Label x:Name="Move4TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
-                        </Border>
-                        <Picker Grid.Column="1" x:Name="Move4Picker" Title="Move 4" />
-                    </Grid>
+                    <VerticalStackLayout Spacing="4">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Border x:Name="Move1TypeChip" Style="{StaticResource TypeChipBorderStyle}">
+                                <Label x:Name="Move1TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
+                            </Border>
+                            <Picker Grid.Column="1" x:Name="Move1Picker" Title="Move 1" />
+                            <Border Grid.Column="2" x:Name="Move1LegalityDot" Style="{StaticResource MoveLegalityDotPassStyle}">
+                                <Label x:Name="Move1LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
+                            </Border>
+                        </Grid>
+                        <Label x:Name="Move1LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Border x:Name="Move2TypeChip" Style="{StaticResource TypeChipBorderStyle}">
+                                <Label x:Name="Move2TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
+                            </Border>
+                            <Picker Grid.Column="1" x:Name="Move2Picker" Title="Move 2" />
+                            <Border Grid.Column="2" x:Name="Move2LegalityDot" Style="{StaticResource MoveLegalityDotPassStyle}">
+                                <Label x:Name="Move2LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
+                            </Border>
+                        </Grid>
+                        <Label x:Name="Move2LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Border x:Name="Move3TypeChip" Style="{StaticResource TypeChipBorderStyle}">
+                                <Label x:Name="Move3TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
+                            </Border>
+                            <Picker Grid.Column="1" x:Name="Move3Picker" Title="Move 3" />
+                            <Border Grid.Column="2" x:Name="Move3LegalityDot" Style="{StaticResource MoveLegalityDotPassStyle}">
+                                <Label x:Name="Move3LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
+                            </Border>
+                        </Grid>
+                        <Label x:Name="Move3LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Border x:Name="Move4TypeChip" Style="{StaticResource TypeChipBorderStyle}">
+                                <Label x:Name="Move4TypeLabel" Style="{StaticResource TypeChipLabelStyle}" />
+                            </Border>
+                            <Picker Grid.Column="1" x:Name="Move4Picker" Title="Move 4" />
+                            <Border Grid.Column="2" x:Name="Move4LegalityDot" Style="{StaticResource MoveLegalityDotPassStyle}">
+                                <Label x:Name="Move4LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
+                            </Border>
+                        </Grid>
+                        <Label x:Name="Move4LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
