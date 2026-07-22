@@ -119,6 +119,37 @@
         <Setter Property="TextColor" Value="{StaticResource StatusFailFg}" />
     </Style>
 
+    <!-- TypeBadge (components/indicators/TypeBadge.jsx), in the "solid" variant and at the fixed
+         width the bundle's own MoveRow uses it at (ui_kits/pkhexmobile/DetailScreen.jsx: solid,
+         size="sm", fixed-width, centred, leading the move name) so the four move rows align in a
+         column. Only the invariant geometry/typography lives here; the per-type fill is one of the
+         18 Type* colour tokens and is applied in code-behind, since a Style per type would be 18
+         near-identical copies. Width is 78, not the mockup's 62 - same intent (column alignment),
+         but 62 truncates the longest type names ("FIGHTING"/"ELECTRIC") at this font size in MAUI,
+         where the browser mockup could shrink to fit. -->
+    <Style x:Key="TypeChipBorderStyle" TargetType="Border">
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="WidthRequest" Value="78" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="StrokeShape">
+            <Setter.Value>
+                <RoundRectangle CornerRadius="999" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="TypeChipLabelStyle" TargetType="Label">
+        <Setter Property="FontFamily" Value="ManropeBold" />
+        <Setter Property="FontSize" Value="{StaticResource Text2xs}" />
+        <Setter Property="CharacterSpacing" Value="0.6" />
+        <Setter Property="LineBreakMode" Value="NoWrap" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
     <Style x:Key="MonoValueStyle" TargetType="Label">
         <Setter Property="FontFamily" Value="JetBrainsMonoSemiBold" />
         <Setter Property="FontSize" Value="{StaticResource TextBase}" />

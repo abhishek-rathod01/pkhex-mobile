@@ -37,6 +37,21 @@ public partial class PokemonDetailPage : ContentPage
     readonly List<int> abilityIds = new();
     readonly List<Nature> natureValues = new();
 
+    // Move type byte -> Colors.xaml "Type*" token name, in PKHeX's OWN type-byte order (i.e. the
+    // index order of GameInfo.Strings.Types, verified in verify/MoveTypes). This deliberately is
+    // NOT the order the design bundle's TypeBadge.jsx lists its types in - that list starts
+    // Normal/Fire/Water/Electric, PKHeX's starts Normal/Fighting/Flying/Poison - so indexing one by
+    // the other would silently mis-colour almost every chip (Fighting would render as Fire).
+    // Hardcoded English keys rather than GameInfo.Strings.Types, so the colour lookup is
+    // independent of UI language: a localized Types[9] of "Feu" would never resolve "TypeFire".
+    // Types[18] ("Stellar", the Gen9 Terastal type) has no design token and is deliberately absent -
+    // verify/MoveTypes confirms no move in any generation's type table is that type (max is 17).
+    static readonly string[] TypeColorKeys =
+    [
+        "Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel",
+        "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark", "Fairy",
+    ];
+
     public PokemonDetailPage()
     {
         InitializeComponent();
@@ -66,10 +81,22 @@ public partial class PokemonDetailPage : ContentPage
         FormPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         AbilityPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         NaturePicker.SelectedIndexChanged += (_, _) => MarkDirty();
-        Move1Picker.SelectedIndexChanged += (_, _) => MarkDirty();
-        Move2Picker.SelectedIndexChanged += (_, _) => MarkDirty();
-        Move3Picker.SelectedIndexChanged += (_, _) => MarkDirty();
-        Move4Picker.SelectedIndexChanged += (_, _) => MarkDirty();
+        // One handler per move Picker, not two - the type chip has to refresh on every selection
+        // change (including the programmatic ones LoadPokemon fires), while MarkDirty must stay
+        // suppressed during load. Those are different concerns on the same event, so they're
+        // combined in OnMoveSelectionChanged rather than stacked as a second subscription.
+        Move1Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move1Picker, Move1TypeChip, Move1TypeLabel);
+        Move2Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move2Picker, Move2TypeChip, Move2TypeLabel);
+        Move3Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move3Picker, Move3TypeChip, Move3TypeLabel);
+        Move4Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move4Picker, Move4TypeChip, Move4TypeLabel);
+    }
+
+    private void OnMoveSelectionChanged(Picker picker, Border chip, Label label)
+    {
+        RefreshMoveTypeChip(picker, chip, label);
+        // MarkDirty gates itself on isLoading, so the chip above still refreshes during load while
+        // the Save button correctly stays clean.
+        MarkDirty();
     }
 
     private void MarkDirty()
@@ -249,6 +276,7 @@ public partial class PokemonDetailPage : ContentPage
     private void PopulateMovePickers(PKM p)
     {
         var names = GameInfo.Strings.Move;
+        var typeNames = GameInfo.Strings.Types;
         int max = Math.Min(p.MaxMoveID, (ushort)(names.Count - 1));
 
         moveIds.Clear();
@@ -260,13 +288,62 @@ public partial class PokemonDetailPage : ContentPage
         for (ushort id = 1; id <= max; id++)
         {
             moveIds.Add(id);
-            items.Add(names[id]);
+            // The type is appended to the item text as well as shown on the chip: MAUI renders
+            // Picker dropdown rows as plain strings, so a styled chip cannot appear inside the open
+            // dropdown, and the dropdown is exactly where the type matters most (choosing among
+            // ~900 moves). The chip covers the collapsed state, this covers the open one. Purely
+            // cosmetic - MoveIdFor resolves the selection through moveIds by index, never by text.
+            items.Add($"{names[id]} ({typeNames[MoveInfo.GetType(id, p.Context)]})");
         }
 
         SetMovePicker(Move1Picker, items, p.Move1);
         SetMovePicker(Move2Picker, items, p.Move2);
         SetMovePicker(Move3Picker, items, p.Move3);
         SetMovePicker(Move4Picker, items, p.Move4);
+
+        // Refresh the chips explicitly rather than relying on the SelectedIndexChanged handlers
+        // above having fired: assigning SelectedIndex the value it already holds (a page instance
+        // reused for a different Pokemon whose move happens to sit at the same index) is a no-op
+        // that raises no event, which would leave the previous Pokemon's chip on screen.
+        RefreshMoveTypeChip(Move1Picker, Move1TypeChip, Move1TypeLabel);
+        RefreshMoveTypeChip(Move2Picker, Move2TypeChip, Move2TypeLabel);
+        RefreshMoveTypeChip(Move3Picker, Move3TypeChip, Move3TypeLabel);
+        RefreshMoveTypeChip(Move4Picker, Move4TypeChip, Move4TypeLabel);
+    }
+
+    // Repaints one move slot's type chip from that slot's currently-selected move. Display only -
+    // nothing here reads or writes the underlying PKM.
+    private void RefreshMoveTypeChip(Picker picker, Border chip, Label label)
+    {
+        var resources = Application.Current?.Resources;
+        if (pk is null || resources is null)
+            return;
+
+        ushort move = MoveIdFor(picker);
+
+        // The empty slot has to be detected from the move ID, never from the type byte:
+        // MoveInfo.GetType(0, ctx) returns 0 in every context (verified in verify/MoveTypes), which
+        // is indistinguishable from a genuine Normal-type move - so branching on the type byte would
+        // paint a cleared slot with a bogus "NORMAL" chip. Neutral placeholder rather than hiding
+        // the chip, so clearing a move doesn't shift the row's layout.
+        if (move == 0)
+        {
+            chip.BackgroundColor = (Color)resources["SurfaceSunken"];
+            label.TextColor = (Color)resources["TextTertiary"];
+            label.Text = "—";
+            return;
+        }
+
+        // p.Context, not a hardcoded context: several moves changed type between generations, so a
+        // Gen1 Pokemon's Gust/Bite/Karate Chop/Sand Attack must read Normal (their Gen1 typing) and
+        // pre-Gen6 Charm/Moonlight/Sweet Kiss likewise - see verify/MoveTypes section 3.
+        byte type = MoveInfo.GetType(move, pk.Context);
+        // "solid" TypeBadge variant per the bundle's MoveRow: white text on the type accent.
+        // The TypeXBg tokens are the soft variant, unused here but present for a one-line switch.
+        string key = type < TypeColorKeys.Length ? TypeColorKeys[type] : "Normal";
+        chip.BackgroundColor = (Color)resources[$"Type{key}"];
+        label.TextColor = Colors.White;
+        label.Text = GameInfo.Strings.Types[type].ToUpperInvariant();
     }
 
     private void SetMovePicker(Picker picker, List<string> items, ushort current)
