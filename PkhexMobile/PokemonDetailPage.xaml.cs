@@ -163,6 +163,21 @@ public partial class PokemonDetailPage : ContentPage
         LoadPokemon(p);
     }
 
+    // Hands off to PokemonTransferPage using the exact same NavigationState contract this page
+    // itself was reached with. parentSave/partyIndex are forwarded as-is (including null, for a
+    // box-opened read-only mon) - PokemonTransferPage.ConfigureImportAvailability already handles
+    // "no writable slot" by hiding the import cards and keeping export available.
+    private async void OnTransferClicked(object? sender, EventArgs e)
+    {
+        if (pk is null)
+            return;
+
+        NavigationState.PendingPokemon = pk;
+        NavigationState.PendingPokemonSave = parentSave;
+        NavigationState.PendingPokemonIndex = partyIndex;
+        await Shell.Current.GoToAsync(nameof(PokemonTransferPage));
+    }
+
     private void LoadPokemon(PKM p)
     {
         // Programmatic field population below fires the same TextChanged/SelectedIndexChanged

@@ -49,6 +49,14 @@
                 Clicked="OnViewBoxesClicked"
                 HorizontalOptions="Fill" />
 
+            <Button
+                x:Name="ViewTrainerBtn"
+                Text="View Trainer"
+                Style="{StaticResource SecondaryButtonStyle}"
+                IsVisible="False"
+                Clicked="OnViewTrainerClicked"
+                HorizontalOptions="Fill" />
+
         </VerticalStackLayout>
     </ScrollView>
 

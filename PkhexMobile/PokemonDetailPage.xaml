@@ -193,6 +193,12 @@
                 </VerticalStackLayout>
             </Border>
 
+            <Button x:Name="TransferBtn"
+                    Text="Import / Export"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Clicked="OnTransferClicked"
+                    HorizontalOptions="Fill" />
+
             <Button x:Name="SaveChangesBtn"
                     Text="Save Changes"
                     Style="{StaticResource PrimaryButtonStyle}"
