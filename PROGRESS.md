@@ -743,10 +743,14 @@ fades back to disabled immediately after a successful save.
   vendored from `msikma/pokesprite` into `Resources/Images/species/` as
   `spr_{id:D4}.png` / `spr_{id:D4}_s.png` (MAUI/Android image-resource names
   must be lowercase, start with a letter, and contain only `[a-z0-9_]` - no
-  hyphens). pokesprite does not yet cover Generation 9 species (Scarlet/
-  Violet/Legends Z-A, dex #906+); those have no file and fall back to the
-  placeholder glyph (see below) - confirmed on-device against a real Gen9
-  save (Skeledirge, dex #911).
+  hyphens). pokesprite does not cover Generation 9 species (Scarlet/Violet/
+  Legends Z-A, dex #906+); as of this pass those species had no file and fell
+  back to the placeholder glyph - confirmed on-device against a real Gen9
+  save (Skeledirge, dex #911). **Superseded 2026-07-22 (commit `200afee`):**
+  the #906-1025 gap was filled from PokeAPI/sprites (front battle sprites,
+  not pokesprite's box/menu-icon style - a mild, accepted style difference).
+  Species coverage is now complete #1-1025, regular and shiny. See "Gen 9
+  species sprite gap" further down for the corrected roadmap entry.
 - **Held-item icons**: vendored the same way into `Resources/Images/items/`
   as `item_{id:D4}.png`, but **keyed by PKHeX's own item ID space** (0-2683,
   read from `vendor/PKHeX.Core/Resources/text/items/text_Items_en.txt`,
@@ -754,9 +758,13 @@ fades back to disabled immediately after a successful save.
   normalized English name - pokesprite's own internal item numbering does
   **not** correspond to PKHeX item IDs, so a numeric-ID-to-numeric-ID mapping
   would have silently produced wrong icons for most items. 933 of 2683 items
-  matched (~35%); unmatched IDs (mostly TM/TR items, stored in pokesprite by
-  type/number rather than a readable name, plus assorted items with no
-  pokesprite icon at all) fall back to the placeholder.
+  matched (~35%) as of this pass; unmatched IDs (mostly TM/TR items, stored
+  in pokesprite by type/number rather than a readable name, plus assorted
+  items with no pokesprite icon at all) fall back to the placeholder.
+  **Superseded**: `db049cc` vendored 43 more name-matched icons (933→976),
+  then `a7aacb4` added 173 type-colored TM/TR icons derived from each TM's
+  taught move (+173, not name-matching). Current total: 1149 of 2684 item
+  IDs have an icon (~43%).
 - **Fallback strategy**: rather than maintaining a hardcoded valid-ID list
   that would go stale as sprite coverage changes, every sprite slot layers a
   static `sprite_placeholder.svg` (a neutral Poké Ball outline glyph,
@@ -764,8 +772,8 @@ fades back to disabled immediately after a successful save.
   to the computed filename. A MAUI `Image` that fails to resolve its `Source`
   simply renders nothing, so the placeholder shows through underneath with
   no broken-image glyph and no crash - confirmed on-device for both a
-  missing species (Gen9 Skeledirge) and (implicitly) any of the ~65% of
-  unmatched item IDs.
+  missing species (Gen9 Skeledirge, since fixed - see above) and the
+  remaining ~57% of unmatched item IDs (still current).
 - `SpriteHelper.cs` (new) - `SpeciesSpriteFile(species, shiny)` /
   `ItemSpriteFile(itemId)`, the filename-computation half of the above.
   `PartyEntryDisplay` (used by both `PartyListPage` and `BoxListPage`'s
@@ -775,9 +783,10 @@ fades back to disabled immediately after a successful save.
   `CollectionView` templates without new per-page glue.
   `PokemonDetailPage.RefreshHero`/`PopulateHeldItem` do the same for the
   single-item detail-screen hero and Main-card held-item row (a **new
-  read-only display** - held item was previously not shown anywhere in the
-  app at all; it is still not user-editable, matching the existing
-  Nature/Ability read-only precedent).
+  read-only display** at the time - held item was previously not shown
+  anywhere in the app at all. **Superseded**: a later session made held
+  item genuinely editable via `pk.ApplyHeldItem` - see "Navigation wiring +
+  consolidated on-device pass" further down for the on-device verification).
 - `PkhexMobile.csproj`'s `MauiImage` glob was `Resources\Images\*`
   (non-recursive) - would have silently skipped both new subdirectories.
   Changed to `Resources\Images\**\*`, plus `Resize="False"` overrides for
@@ -818,7 +827,7 @@ library-level proxy), screenshots in `verify/UIReskin/screenshots/`:
 | 5 | `gen5_real.sav` | Load → party list (sprites render) → detail (Main/Moves/Stats cards, legality banner) → nickname edit (Save button clean→dirty) → Save Changes → real FileSaver dialog → saved → button dirty→clean again → reloaded party list shows edited nickname | ✅ all pass |
 | 1 | `gen1_real.sav` (MEW, maxed stat exp) | Party list sprites (Gen1 dex range fully covered) → detail shows Gen1/2-specific labels ("IVs / DVs (0-15 each; HP derived, SpD linked to SpA)", "EVs / Stat Exp (0-65535 each...)"), HP/SpD IV fields and SpD EV field visibly disabled and mirroring SpA, Ability shows "—", Nature shows "Hardy" (sentinel) | ✅ matches pre-reskin documented behavior exactly, no regressions |
 | 1 | (same) | Typed "99" into an editable IV field | ✅ live-clamped to 15 as digits landed, confirming the "can't be entered in the first place" clamp survived the restyle |
-| 9 | `gen9_real.sav` (Skeledirge, dex #911) | Detail hero shows Poké Ball placeholder (dex #911 > pokesprite's #905 ceiling - expected, not a bug) → changed Species Skeledirge→Quaxwell via the restyled Picker dialog → Save Changes → real FileSaver dialog → saved (status line correctly appended the species-changed legality note) → button dirty→clean | ✅ pass |
+| 9 | `gen9_real.sav` (Skeledirge, dex #911) | Detail hero shows Poké Ball placeholder (dex #911 > pokesprite's #905 ceiling - expected, not a bug **at the time**; the #906-1025 gap was later filled by commit `200afee`, so this species now renders a real sprite) → changed Species Skeledirge→Quaxwell via the restyled Picker dialog → Save Changes → real FileSaver dialog → saved (status line correctly appended the species-changed legality note) → button dirty→clean | ✅ pass |
 | 9 | (same) | Pulled the exported file, read back via a throwaway PKHeX.Core harness (deleted after use, per existing project convention - see `OnDeviceEvFix` above) | `Species=913 (Quaxwell)`, `Level=100`, **`Stat_Level=100`** (not the species-before-level EXP-reinterpretation bug fixed in the previous session), `Stat_HPMax=299` (recomputed for the new species, not stale) - confirms the two bugs the previous session fixed are still fixed after this session's restyle |
 
 No regressions found in species/move editing, IV/EV editing (both the
@@ -933,6 +942,14 @@ button - already worked correctly end-to-end from Tasks 1/2, with no
 regressions from this pass's template edits.
 
 ## Roadmap / not yet started (as of 2026-07-21, post-legality-badge)
+
+> **All four items below were resolved in later sessions** (box move/swap,
+> Form/Nature/Ability editing, the Gen 9 sprite gap, and further item-icon
+> coverage - see "Sprites and held-item icons" above and the "Box/party move
+> + swap" and "Form + Nature + Ability editing" sections further down for
+> the corrected, current state). Left in place as a dated snapshot rather
+> than rewritten, since the sections that superseded each item are already
+> in this file.
 
 - **Box (PC) editing.** Still read-only via the structural null-`parentSave`
   guard; no box→party moves or slot swaps.
@@ -1467,3 +1484,105 @@ still round-trips with the stat block tracking it - the behaviour the
 The range captions are now interpolated from `ivMax`/`evMax` rather than
 written as literals, so a caption can no longer drift from the cap actually
 enforced (the old literal "EVs (0-252 each)" was itself wrong on Gen3/4/5).
+
+## Navigation wiring + consolidated on-device pass (2026-07-22)
+
+The previous session ended with `TrainerInfoPage` and `PokemonTransferPage`
+fully coded but unreachable from the running app - deliberately left
+disconnected so four concurrent agents wouldn't collide on `MainPage.xaml`/
+`AppShell.xaml.cs`. This pass did the deferred integration (sequentially, no
+subagents, per this project's own §8 cost lessons) and then ran the
+consolidated on-device verification pass the handoff called for, since this
+project has a documented history of bugs that only surface on-device.
+
+### Navigation wiring
+
+- `AppShell.xaml.cs` registers `TrainerInfoPage` and `PokemonTransferPage`
+  as routes.
+- `MainPage` gains a "View Trainer" button, visible whenever a save is
+  loaded (not gated on `PartyCount`/`HasBox` like the other two buttons,
+  since `TrainerInfoPage` itself already handles the "this save has no
+  trainer block" case via `TrainerFieldSupport`).
+- `PokemonDetailPage` gains an "Import / Export" button that forwards the
+  current `pk`/`parentSave`/`partyIndex` through the exact same
+  `NavigationState` hand-off the page itself was reached with - including a
+  `null` `parentSave` for a box-opened mon, which `PokemonTransferPage.
+  ConfigureImportAvailability` already handles by hiding the import cards
+  and leaving export available. No new `NavigationState` fields needed.
+
+### On-device verification: three flows, all real device I/O, no bugs found
+
+Driven on `PkhexMobile_Emulator`, real `FileSaver`/`FilePicker`, real touch
+input, real save files (`gen5_real.sav`, plus a real `.pk3` pulled from
+`172 - PICHU - 0377DA486937.pk3` in the project's save inventory).
+Screenshots in `verify/OnDeviceNavAudit/screenshots/`.
+
+1. **Trainer screen (newly reachable, never verified before this pass).**
+   Loaded `gen5_real.sav`, tapped View Trainer - real OT/TID/SID/Money/
+   PlayTime/Gender/Language/Pokédex data rendered. Edited OT name; the
+   7-character `MaxLength` for SAV5BW live-truncated the typed text before
+   it could exceed the cap (confirms the "can't be entered in the first
+   place" clamp pattern holds here too, not just on the IV/EV fields it was
+   built for). Saved through the real FileSaver dialog, pulled the exported
+   file, re-parsed it with a throwaway PKHeX.Core harness (deleted after
+   use, per this project's established convention): OT read back exactly as
+   truncated, every other field byte-for-byte unchanged.
+2. **`.pk` / Showdown transfer (brand new page, never on-device verified -
+   the previous session wrote it but it was unreachable).** From a party
+   Pokémon's new Import/Export button: exported a `.pk5` (Serperior),
+   pulled it and re-parsed it with PKHeX.Core - matched the on-screen
+   Showdown text exactly (species, nature, ability, IVs, EVs, moves).
+   Imported the real `.pk3` (a Gen3 Pichu, OT "Erick R", pulled from this
+   project's own save inventory) through the real file picker - **the app
+   correctly converted PK3→PK5** and reported "IMPORTED — CONVERTED".
+   Applied a hand-typed Showdown set (Pikachu, Level 25, Adamant, Thunderbolt)
+   via "Apply set" - "SET APPLIED". Saved through the real FileSaver dialog;
+   the exported save, re-parsed, showed the imported Pichu in the target
+   party slot with the exact species/level/OT/PID/IVs from the source file.
+   This is the first real cross-generation entity conversion (3→5) this
+   project has exercised through the actual on-device file-picker path
+   rather than a library harness.
+3. **Box↔party move/swap (re-verified; the tap-to-select path already had
+   on-device coverage from the 2026-07-21 session, see "Box/party move +
+   swap" above).** Enabled Move mode, selected a party Pokémon, tapped an
+   empty box slot - "Moved.", party count updated 6/6→5/6, box occupancy
+   updated 1→2 Pokémon, both grids reflected the change immediately.
+4. **Form/Nature/Ability editing (re-verified; had on-device coverage from
+   the 2026-07-22 Form+Nature+Ability session, see above).** Changed a
+   Gen5 Volcarona's Nature (Gentle→Jolly) via the restyled Picker, saved,
+   pulled the file - Nature persisted and the stat block was recalculated
+   for the new nature (confirms `natureChanged` still correctly drives
+   `ResetPartyStats()`, unregressed by this session's changes).
+
+### Bonus finding: held item editing had already shipped, undocumented and unverified
+
+While auditing `PokemonDetailPage.xaml.cs` for stale-doc purposes (see
+below), found that held-item editing - listed in the previous session's
+`WAKEUP.md` as "not started" alongside ball and friendship - is actually
+**fully implemented**: `PopulateHeldItem` builds a per-format item picker
+(`GameInfo.Strings.GetItemStrings(p.Context)`, correctly keyed to each
+generation's own item ID space), disabled with an explanatory caption on
+Gen1 (held item is the catch-rate byte there, a hard no-op), and
+`OnSaveChangesClicked` applies it via `pk.ApplyHeldItem` (not a raw
+`HeldItem =`, so item-specific side effects run). This had never been
+on-device verified. Done here: changed a Gen5 Volcarona's held item to
+Master Ball via the picker, saved through the real FileSaver dialog, pulled
+the file and re-parsed it - `HeldItem=1` (Master Ball in Gen5's item space)
+persisted correctly. Ball and friendship remain genuinely unimplemented -
+only the held-item claim in the prior handoff was wrong.
+
+### Documentation corrections (the previous session's WAKEUP.md item 3)
+
+- **Gen 9 species sprites**: corrected the "Sprites and held-item icons"
+  section and the roadmap entry - the #906-1025 gap this file previously
+  described as open was filled by commit `200afee` (front battle sprites
+  from PokeAPI, not pokesprite's box-icon style - an accepted style
+  mismatch). Species coverage is now #1-1025 complete, regular and shiny.
+- **Item icon coverage**: corrected the "933 of 2683 (~35%)" figure - two
+  later commits (`db049cc`, +43; `a7aacb4`, +173 TM/TR icons via
+  move-type mapping) brought current coverage to 1149 of 2684 IDs (~43%),
+  counted directly from `Resources/Images/items/` rather than re-quoted
+  from memory.
+- **"Not started / deferred" list**: held-item editing removed (see
+  "Bonus finding" above); ball and friendship confirmed still absent by
+  grepping `PokemonDetailPage.xaml.cs` for any trace of them (none found).
