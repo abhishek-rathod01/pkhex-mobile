@@ -26,6 +26,9 @@ public partial class PokemonDetailPage : ContentPage
     bool formEditable;
     bool abilityEditable;
     bool natureEditable;
+    // Held item is real from Gen2 on; Gen1's setter is a hard no-op (PK1.cs:157 - that byte is the
+    // catch rate). Same disable-but-show-the-truth treatment as the three above.
+    bool heldItemEditable;
 
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
@@ -42,6 +45,10 @@ public partial class PokemonDetailPage : ContentPage
     readonly List<byte> formValues = new();
     readonly List<int> abilityIds = new();
     readonly List<Nature> natureValues = new();
+    // Item IDs in the loaded Pokemon's OWN format ID space (see PopulateHeldItem) - blank/unused
+    // IDs are filtered out of the visible list, so this parallel list is what maps a picker index
+    // back to a real item ID.
+    readonly List<int> itemIds = new();
 
     // Move type byte -> Colors.xaml "Type*" token name, in PKHeX's OWN type-byte order (i.e. the
     // index order of GameInfo.Strings.Types, verified in verify/MoveTypes). This deliberately is
@@ -87,6 +94,10 @@ public partial class PokemonDetailPage : ContentPage
         FormPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         AbilityPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         NaturePicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        // Like the move chips, the item icon must repaint on programmatic selection changes during
+        // LoadPokemon too, while MarkDirty stays suppressed by isLoading - so both live in one
+        // handler rather than as two subscriptions.
+        ItemPicker.SelectedIndexChanged += (_, _) => OnHeldItemSelectionChanged();
         // One handler per move Picker, not two - the type chip has to refresh on every selection
         // change (including the programmatic ones LoadPokemon fires), while MarkDirty must stay
         // suppressed during load. Those are different concerns on the same event, so they're
@@ -102,6 +113,21 @@ public partial class PokemonDetailPage : ContentPage
         RefreshMoveTypeChip(picker, chip, label);
         // MarkDirty gates itself on isLoading, so the chip above still refreshes during load while
         // the Save button correctly stays clean.
+        MarkDirty();
+    }
+
+    // Repaints the held-item icon for the CURRENTLY SELECTED item, before anything is written to
+    // the PKM. The stored ID must be converted into the modern sprite ID space the vendored icons
+    // are numbered in - pk.SpriteItem does that for the saved value, but a pending selection isn't
+    // saved yet, so the same conversion is applied explicitly via ItemConverter.GetItemForFormat
+    // (which is exactly what PKM.SpriteItem's overrides call underneath).
+    private void OnHeldItemSelectionChanged()
+    {
+        if (pk is not null)
+        {
+            int pending = HeldItemIdFor();
+            RefreshHeldItemIcon(ItemConverter.GetItemForFormat(pending, pk.Context, EntityContext.Gen9));
+        }
         MarkDirty();
     }
 
@@ -252,12 +278,71 @@ public partial class PokemonDetailPage : ContentPage
             : $"{speciesName} · Lv {p.CurrentLevel}";
     }
 
+    // Held item. Editable from Gen2 on via pk.ApplyHeldItem; a hard no-op on Gen1.
+    //
+    // Two ID-space traps here, both real and both easy to get silently wrong:
+    //
+    // (a) The PICKER must be built from GameInfo.Strings.GetItemStrings(p.Context), not from the
+    //     modern GameInfo.Strings.Item list. Gen1, Gen2, Gen3, Gen4, Gen8b and Gen9 each get their
+    //     own array (GameStrings.cs:794-805) because those formats number items differently. Using
+    //     the modern list would offer names that don't correspond to the IDs actually being stored.
+    //     Because the returned array is indexed by that format's OWN item IDs, the picker index maps
+    //     straight to the value pk.HeldItem takes.
+    //
+    // (b) The SPRITE must be looked up from p.SpriteItem, not p.HeldItem. PK2.cs:59 routes through
+    //     ItemConverter.GetItemFuture2 and PK3/CK3/XK3 through GetItemFuture3, converting the stored
+    //     old-format ID into the Gen4+ ID space. The app's vendored item icons are numbered in that
+    //     modern space, so passing the raw HeldItem would render the wrong icon on Gen2 AND Gen3.
+    //     (CAPABILITY-AUDIT.md 3.3 only warns about Gen2; Gen3 has the same problem - verified
+    //     against the source and in verify/DetailFieldEdits part B.)
     private void PopulateHeldItem(PKM p)
     {
-        bool hasItem = p.HeldItem != 0;
+        var names = GameInfo.Strings.GetItemStrings(p.Context);
+        int max = Math.Min(p.MaxItemID, names.Length - 1);
+
+        itemIds.Clear();
+        var items = new List<string> { "(None)" };
+        itemIds.Add(0);
+        for (int id = 1; id <= max; id++)
+        {
+            // Unused IDs come back blank in these arrays; skipping them keeps the list navigable
+            // without needing a hardcoded valid-ID table to maintain. itemIds preserves the real
+            // ID for every surviving row, so the filtering can never shift the mapping.
+            if (string.IsNullOrWhiteSpace(names[id]))
+                continue;
+            itemIds.Add(id);
+            items.Add(names[id]);
+        }
+        ItemPicker.ItemsSource = items;
+
+        heldItemEditable = p.Generation >= 2;
+        ItemPicker.IsEnabled = heldItemEditable;
+        ItemCaptionLabel.Text = heldItemEditable
+            ? "Held item"
+            : "Held item (Gen 1 has no held items - that byte is the catch rate, see PROGRESS.md)";
+        ItemPicker.Title = heldItemEditable
+            ? "Select held item"
+            : "N/A (no held items in Gen 1)";
+
+        // A stored ID with no name in this format's table (corrupt or out of range) falls back to
+        // "(None)" rather than crashing on an unfound index, same as the move/form picker fallbacks.
+        int sel = itemIds.IndexOf(p.HeldItem);
+        ItemPicker.SelectedIndex = sel >= 0 ? sel : 0;
+
+        RefreshHeldItemIcon(p.SpriteItem);
+    }
+
+    private void RefreshHeldItemIcon(int spriteItemId)
+    {
+        bool hasItem = spriteItemId > 0;
         ItemIconBorder.IsVisible = hasItem;
-        ItemSpriteImage.Source = hasItem ? SpriteHelper.ItemSpriteFile(p.HeldItem) : null;
-        ItemNameLabel.Text = hasItem ? PkmDisplayHelper.GetItemName(p.HeldItem) : "None";
+        ItemSpriteImage.Source = hasItem ? SpriteHelper.ItemSpriteFile(spriteItemId) : null;
+    }
+
+    private int HeldItemIdFor()
+    {
+        int idx = ItemPicker.SelectedIndex;
+        return idx >= 0 && idx < itemIds.Count ? itemIds[idx] : 0;
     }
 
     // Read-only legality snapshot (PKHeX.Core's own LegalityAnalysis, no changes made to it and no
@@ -669,6 +754,11 @@ public partial class PokemonDetailPage : ContentPage
             newNature = natureValues[NaturePicker.SelectedIndex];
         }
 
+        int newHeldItem = pk.HeldItem;
+        if (heldItemEditable)
+            newHeldItem = HeldItemIdFor();
+
+        bool heldItemChanged = heldItemEditable && newHeldItem != pk.HeldItem;
         bool speciesChanged = newSpecies != pk.Species;
         bool formChanged = formEditable && newForm != pk.Form;
         bool abilityChanged = abilityEditable && newAbility != pk.Ability;
@@ -724,6 +814,15 @@ public partial class PokemonDetailPage : ContentPage
                 if (pk.Format >= 8)
                     pk.StatAlignment = newNature;
             }
+
+            // ApplyHeldItem, not `pk.HeldItem = id` (CommonEdits.cs:286): it runs the value through
+            // ItemConverter.GetItemForFormat and zeroes anything past pk.MaxItemID, so an item that
+            // this format cannot represent becomes "no item" instead of a corrupt ID. Source context
+            // is pk.Context because the picker is already built in this format's own ID space, which
+            // makes the conversion an identity and leaves just the bounds check. Held item does not
+            // feed the stat block, so it is deliberately absent from statsAffected (same as Ability).
+            if (heldItemEditable)
+                pk.ApplyHeldItem(newHeldItem, pk.Context);
 
             pk.IV_HP = ivHp;
             pk.IV_ATK = ivAtk;

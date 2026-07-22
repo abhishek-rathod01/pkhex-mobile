@@ -73,12 +73,93 @@
             <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="12">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="Box" Style="{StaticResource LabelCaptionStyle}" />
-                    <Picker x:Name="BoxPicker"
-                            Title="Select box"
-                            SelectedIndexChanged="OnBoxSelected" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Picker x:Name="BoxPicker" Grid.Column="0"
+                                Title="Select box"
+                                SelectedIndexChanged="OnBoxSelected" />
+                        <Button x:Name="ManageBtn" Grid.Column="1" Text="Manage"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Clicked="OnManageToggleClicked" />
+                    </Grid>
                     <Label x:Name="BoxHeaderLabel" Style="{StaticResource MutedStyle}" />
                 </VerticalStackLayout>
             </Border>
+
+            <!-- Box management panel. Occupies the same grid row as the box grid and is mutually
+                 exclusive with it (see SetManagePanelVisible) rather than stacking above it: opening
+                 a third tall card on a phone would squeeze the grid to nothing. Swapping instead
+                 keeps every layout bounded and makes "you are managing this box" unambiguous. -->
+            <ScrollView x:Name="ManagePanel" Grid.Row="1" IsVisible="False">
+                <VerticalStackLayout Spacing="12">
+
+                    <!-- 1. Rename. Gated on IBoxDetailName. When the save has no box-name storage
+                         the Entry stays visible and populated with the true current value, disabled,
+                         with an inline reason - the project's established treatment for a setter
+                         that would otherwise silently no-op. -->
+                    <Border Style="{StaticResource CardBorderStyle}" Padding="12">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Box name" Style="{StaticResource SectionTitleStyle}" />
+                            <Label x:Name="BoxNameCaptionLabel" Text="Name" Style="{StaticResource LabelCaptionStyle}" />
+                            <Entry x:Name="BoxNameEntry" Placeholder="Box name" />
+                            <Label x:Name="BoxNameNoticeLabel" Style="{StaticResource WarningBannerStyle}" IsVisible="False" />
+                            <Button x:Name="RenameBtn" Text="Rename box"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Clicked="OnRenameClicked" HorizontalOptions="Start" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 2. Bulk operations. Scope is an explicit, always-visible choice that
+                         defaults to the single current box - never inferred, never remembered
+                         across a page visit, and restated verbatim in every confirmation. -->
+                    <Border Style="{StaticResource CardBorderStyle}" Padding="12">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Box tools" Style="{StaticResource SectionTitleStyle}" />
+                            <Label Text="Applies to" Style="{StaticResource LabelCaptionStyle}" />
+                            <Picker x:Name="ScopePicker" Title="Choose scope"
+                                    SelectedIndexChanged="OnScopeChanged" />
+                            <Label x:Name="ScopeSummaryLabel" Style="{StaticResource WarningBannerStyle}" />
+
+                            <Label Text="Reorder" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                            <Button x:Name="SortSpeciesBtn" Text="Sort by species"
+                                    Style="{StaticResource SecondaryButtonStyle}" Clicked="OnSortSpeciesClicked" />
+                            <Button x:Name="SortLevelBtn" Text="Sort by level"
+                                    Style="{StaticResource SecondaryButtonStyle}" Clicked="OnSortLevelClicked" />
+                            <Button x:Name="CompactBtn" Text="Close gaps (keep order)"
+                                    Style="{StaticResource SecondaryButtonStyle}" Clicked="OnCompactClicked" />
+
+                            <Label Text="Destructive" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                            <Button x:Name="ClearBtn" Text="Delete all Pokemon"
+                                    Style="{StaticResource DangerButtonStyle}" Clicked="OnClearClicked" />
+                            <Label Text="Deleting cannot be undone. Nothing reaches your save file until you press Export Save."
+                                   Style="{StaticResource MutedStyle}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 3. Read-only box details. Each row is interface- or sentinel-gated and shows
+                         the true current value either way; the reason line explains an absence
+                         rather than the row silently vanishing. -->
+                    <Border Style="{StaticResource CardBorderStyle}" Padding="12">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Box details" Style="{StaticResource SectionTitleStyle}" />
+
+                            <Label Text="Box the game opens on" Style="{StaticResource LabelCaptionStyle}" />
+                            <Label x:Name="CurrentBoxValueLabel" Style="{StaticResource MonoValueStyle}" />
+                            <Button x:Name="SetCurrentBoxBtn" Text="Open on this box"
+                                    Style="{StaticResource GhostButtonStyle}"
+                                    Clicked="OnSetCurrentBoxClicked" HorizontalOptions="Start" />
+                            <Label x:Name="CurrentBoxNoticeLabel" Style="{StaticResource WarningBannerStyle}" IsVisible="False" />
+
+                            <Label Text="Boxes unlocked" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                            <Label x:Name="BoxesUnlockedValueLabel" Style="{StaticResource MonoValueStyle}" />
+
+                            <Label Text="Wallpaper" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                            <Label x:Name="WallpaperValueLabel" Style="{StaticResource MonoValueStyle}" />
+                            <Label x:Name="WallpaperNoticeLabel" Style="{StaticResource MutedStyle}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+            </ScrollView>
 
             <CollectionView x:Name="BoxGrid" Grid.Row="1" SelectionMode="None">
                 <CollectionView.ItemsLayout>

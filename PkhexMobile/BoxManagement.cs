@@ -21,7 +21,7 @@ public enum BoxSortOrder
     Level,
 
     /// <summary>No reordering at all - only pulls the holes out, preserving existing relative order.
-    /// See <see cref="Sort"/> for why this is done via SortBoxes rather than CompressStorage.</summary>
+    /// See <see cref="BoxManagement.Sort"/> for why this is done via SortBoxes, not CompressStorage.</summary>
     Compact,
 }
 
@@ -335,6 +335,26 @@ public static class BoxManagement
         {
             if (!string.Equals(before[i], after[i], StringComparison.Ordinal))
                 n++;
+        }
+        return n;
+    }
+
+    /// <summary>Occupied slots in a box range, counted straight off the save.
+    /// <para>Deliberately not <c>CountOccupied(PositionalDigests(sav))</c>: the confirmation prompt
+    /// for a destructive op needs an exact number and nothing else, and building 28-field digests
+    /// for a 960-slot Gen9 PC to get it would be wasteful on a phone.</para></summary>
+    public static int CountStored(SaveFile sav, int boxStart, int boxStop)
+    {
+        int n = 0;
+        boxStart = Math.Max(boxStart, 0);
+        boxStop = Math.Min(boxStop, sav.BoxCount - 1);
+        for (int b = boxStart; b <= boxStop; b++)
+        {
+            for (int s = 0; s < sav.BoxSlotCount; s++)
+            {
+                if (sav.GetBoxSlotAtIndex(b, s).Species != 0)
+                    n++;
+            }
         }
         return n;
     }

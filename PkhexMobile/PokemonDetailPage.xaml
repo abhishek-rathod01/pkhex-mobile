@@ -78,18 +78,25 @@
                     <Label x:Name="FormCaptionLabel" Text="Form" Style="{StaticResource LabelCaptionStyle}" />
                     <Picker x:Name="FormPicker" Title="Select form" />
 
-                    <Label Text="Held item" Style="{StaticResource LabelCaptionStyle}" />
-                    <HorizontalStackLayout Spacing="8">
+                    <!-- Held item: editable Gen2+ via pk.ApplyHeldItem. Gen1 is a hard no-op
+                         (PK1.cs:157 `HeldItem { get => 0; set { } }` - RBY has no held items and
+                         that byte is the catch rate), so the Picker is disabled there with the
+                         reason inline, same precedent as the Gen1/2 IV fields and the Ability/
+                         Nature pickers. The icon keeps its own row beside the Picker rather than
+                         inside it: MAUI renders Picker dropdown rows as plain strings and cannot
+                         host an Image. -->
+                    <Label x:Name="ItemCaptionLabel" Text="Held item" Style="{StaticResource LabelCaptionStyle}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <Border x:Name="ItemIconBorder" WidthRequest="28" HeightRequest="28"
-                                Stroke="Transparent" StrokeThickness="0"
+                                Stroke="Transparent" StrokeThickness="0" VerticalOptions="Center"
                                 BackgroundColor="{StaticResource SurfaceSunken}" IsVisible="False">
                             <Border.StrokeShape>
                                 <RoundRectangle CornerRadius="8" />
                             </Border.StrokeShape>
                             <Image x:Name="ItemSpriteImage" Aspect="AspectFit" WidthRequest="20" HeightRequest="20" />
                         </Border>
-                        <Label x:Name="ItemNameLabel" Style="{StaticResource BodyStyle}" VerticalOptions="Center" />
-                    </HorizontalStackLayout>
+                        <Picker Grid.Column="1" x:Name="ItemPicker" Title="Select held item" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 
