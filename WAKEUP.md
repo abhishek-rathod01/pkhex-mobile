@@ -307,3 +307,59 @@ salvageable in-progress work (`git status`/`git diff`) before assuming
 anything needs to be redone from scratch. In this case the interrupted
 agent's work was complete and correct; the only thing missing was the
 docs-and-commit step.
+
+## Detail-screen editor expansion (2026-07-22) — IN PROGRESS, resume here
+
+Working a 5-item queue against `CAPABILITY-AUDIT.md`. **Everything claimed
+done below is committed** — this section is written incrementally precisely so
+a usage-limit cutoff can't leave the next session guessing.
+
+Owned files this pass: `PkhexMobile/PokemonDetailPage.xaml[.cs]`,
+`PkhexMobile/Resources/Styles/Styles.xaml`, `verify/**`. `MainPage.*`,
+`AppShell.*`, `BoxListPage.*` belong to other agents and were **not touched**.
+
+| # | Item | State | Commit |
+|---|---|---|---|
+| 1 | Move-type indicators (finish + verify the rescued `3b75c12` work) | ✅ done, harness + on-device Gen1/Gen9 | `795a1d5` |
+| 2 | EV cap defect — `pk.MaxEV`/`pk.MaxIV` (audit §4.1) | ✅ done, harness all-pass | `5481cc1` |
+| 3 | Held item **editing** (audit §3.3) | in progress | — |
+| 4 | Ball (audit §3.7) | not started | — |
+| 5 | Friendship (audit §3.6) | not started | — |
+
+**Build bar holds:** `dotnet build PkhexMobile/PkhexMobile.csproj -f
+net10.0-android -c Debug` → 0 errors. The single warning present is
+`BoxManagement.cs(24,24) CS1574` (unresolved `<see cref="Sort"/>`), which
+belongs to **another agent's file**, not this pass — deliberately not fixed,
+since that file isn't mine to touch.
+
+**Two findings worth carrying forward regardless of what happens next:**
+
+1. **`CAPABILITY-AUDIT.md` §4.1's recommendation is internally contradictory**
+   and should not be followed literally. It says to use `pk.GetMaximumEV(i)` as
+   the EV field cap to fix the Gen3-5 under-cap — but `CommonEdits.cs:336`
+   clamps that function's result to `EffortValues.Max252` regardless of
+   format, so it *re-imposes* the exact 252 ceiling. Verified empirically on a
+   real Gen3 save with all EVs zeroed: `GetMaximumEV(ATK)` returns 252 while
+   `pk.MaxEV` is 255. Correct split (now shipped): field cap = `pk.MaxEV`,
+   510-budget = an advisory caption. Full reasoning in PROGRESS.md.
+2. **Gen3 has a different item ID space too, not just Gen2.** The audit warns
+   only about Gen2 (`PK2.SpriteItem => GetItemFuture2`), but `PK3`/`CK3`/`XK3`
+   all override `SpriteItem => ItemConverter.GetItemFuture3` as well. Any
+   held-item sprite/name lookup must route through `pk.SpriteItem`, and any
+   item *picker* must be built from
+   `GameInfo.Strings.GetItemStrings(pk.Context)` — the modern
+   `GameInfo.Strings.Item` list is the wrong ID space for Gen1-3 and Gen4/8b/9
+   variants.
+
+**Shared harness:** `verify/DetailFieldEdits/` covers items 2-5 (part A = EV/IV
+caps, further parts appended per item). Run with
+`dotnet run --project verify/DetailFieldEdits/DetailFieldEdits.csproj`;
+exit code 0 = all pass. It clones byte arrays before `SaveUtil.GetSaveFile`
+and re-verifies every fixture save is byte-for-byte untouched on disk.
+
+**On-device screenshots:** `verify/OnDeviceDetailExpansion/screenshots/`.
+Emulator ADB helper used this pass (dump text nodes + real tap coords, no 1.2×
+scaling needed since `uiautomator` bounds are already device coords) is worth
+recreating: `adb shell uiautomator dump /sdcard/ui.xml` then parse
+`text="..." ... bounds="[x1,y1][x2,y2]"`. Note Git Bash mangles `/sdcard/...`
+paths — prefix adb calls with `MSYS_NO_PATHCONV=1`.
