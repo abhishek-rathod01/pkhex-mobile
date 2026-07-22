@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:PkhexMobile"
+             x:Class="PkhexMobile.PokemonTransferPage"
+             Title="Import / Export">
+
+    <ContentPage.Resources>
+        <!-- Page-local only: Styles.xaml is owned by another agent, so anything this page needs
+             that the shared vocabulary does not already provide is defined here. Both of these
+             derive from shared styles so they stay in step with the design system. -->
+        <Style x:Key="TransferTextBoxStyle" TargetType="Editor">
+            <Setter Property="FontFamily" Value="JetBrainsMonoRegular" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HeightRequest" Value="190" />
+            <Setter Property="AutoSize" Value="Disabled" />
+            <Setter Property="BackgroundColor" Value="{StaticResource SurfaceInset}" />
+            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        </Style>
+        <Style x:Key="TransferHintStyle" TargetType="Label" BasedOn="{StaticResource MutedStyle}">
+            <Setter Property="LineBreakMode" Value="WordWrap" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+
+            <!-- Hero: same 88pt sunken sprite tile + title/subtitle pairing as PokemonDetailPage. -->
+            <Grid ColumnDefinitions="88,*" ColumnSpacing="16" Margin="0,4,0,0">
+                <Border WidthRequest="88" HeightRequest="88" Stroke="Transparent" StrokeThickness="0"
+                        BackgroundColor="{StaticResource SurfaceSunken}">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="16" />
+                    </Border.StrokeShape>
+                    <Grid>
+                        <Image Source="sprite_placeholder.svg" Aspect="AspectFit"
+                               WidthRequest="44" HeightRequest="44"
+                               HorizontalOptions="Center" VerticalOptions="Center" />
+                        <Image x:Name="SpriteImage" Aspect="AspectFit"
+                               WidthRequest="76" HeightRequest="76"
+                               HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Grid>
+                </Border>
+                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="4">
+                    <HorizontalStackLayout Spacing="6">
+                        <Label x:Name="TitleLabel" Style="{StaticResource HeroTitleStyle}" />
+                        <Label x:Name="ShinyStarLabel" Text="&#9733;" Style="{StaticResource ShinyStarStyle}" IsVisible="False" />
+                    </HorizontalStackLayout>
+                    <Label x:Name="SubtitleLabel" Style="{StaticResource MutedStyle}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Persistent, always-visible: an import is never validated or auto-corrected. Same
+                 stance and same treatment as PokemonDetailPage's warning banner. -->
+            <Border BackgroundColor="{StaticResource StatusWarnBg}" Stroke="Transparent" StrokeThickness="0" Padding="12">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+                <Label Text="&#9888; Imports are applied exactly as written, with no validation and no auto-fix. PKHeX.Core will not correct an impossible Pokémon for you, so an imported set may be flagged as illegal by other tools. Open the details screen to see the legality report."
+                       Style="{StaticResource WarningBannerStyle}"
+                       LineBreakMode="WordWrap" />
+            </Border>
+
+            <!-- ============================ EXPORT ============================ -->
+            <Label Text="EXPORT" Style="{StaticResource LabelCaptionStyle}" Margin="4,6,0,0" />
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Entity file" Style="{StaticResource SectionTitleStyle}" />
+                    <Label x:Name="ExportEntityHint" Style="{StaticResource TransferHintStyle}" />
+                    <Button x:Name="ExportEntityBtn"
+                            Text="Export .pk file"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Clicked="OnExportEntityClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Showdown set" Style="{StaticResource SectionTitleStyle}" />
+                    <Label Text="Text is lossy by design: it carries species, form, item, ability, level, gender, shininess, nature, friendship, EVs, IVs, moves and Tera type — but no PID, OT, ID, ball, met data, origin game or ribbons. Use a .pk file to move a Pokémon losslessly."
+                           Style="{StaticResource TransferHintStyle}" />
+                    <Editor x:Name="ShowdownExportEditor"
+                            Style="{StaticResource TransferTextBoxStyle}"
+                            IsReadOnly="True" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button x:Name="CopyShowdownBtn" Grid.Column="0"
+                                Text="Copy text"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Clicked="OnCopyShowdownClicked" />
+                        <Button x:Name="SaveShowdownBtn" Grid.Column="1"
+                                Text="Save as .txt"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Clicked="OnSaveShowdownClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ============================ IMPORT ============================ -->
+            <Label Text="IMPORT" Style="{StaticResource LabelCaptionStyle}" Margin="4,6,0,0" />
+
+            <!-- Shown instead of the import cards when this Pokémon was opened read-only. -->
+            <Border x:Name="ImportUnavailableBorder"
+                    BackgroundColor="{StaticResource SurfaceSunken}" Stroke="Transparent"
+                    StrokeThickness="0" Padding="12" IsVisible="False">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+                <Label x:Name="ImportUnavailableLabel" Style="{StaticResource TransferHintStyle}" />
+            </Border>
+
+            <Border x:Name="ImportEntityCard" Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Entity file" Style="{StaticResource SectionTitleStyle}" />
+                    <Label x:Name="ImportEntityHint" Style="{StaticResource TransferHintStyle}" />
+                    <Button x:Name="ImportEntityBtn"
+                            Text="Choose a .pk file…"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Clicked="OnImportEntityClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border x:Name="ImportShowdownCard" Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Showdown set" Style="{StaticResource SectionTitleStyle}" />
+                    <Label Text="Paste a set below. Everything the text does not mention keeps its current value — a Showdown import overwrites, it does not create a new Pokémon from scratch."
+                           Style="{StaticResource TransferHintStyle}" />
+                    <Editor x:Name="ShowdownImportEditor"
+                            Style="{StaticResource TransferTextBoxStyle}"
+                            Placeholder="Garchomp @ Rocky Helmet&#10;Ability: Rough Skin&#10;Level: 50&#10;Jolly Nature&#10;EVs: 252 Atk / 4 HP / 252 Spe&#10;- Earthquake&#10;- Dragon Claw" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button x:Name="PasteShowdownBtn" Grid.Column="0"
+                                Text="Paste"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Clicked="OnPasteShowdownClicked" />
+                        <Button x:Name="ApplyShowdownBtn" Grid.Column="1"
+                                Text="Apply set"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Clicked="OnApplyShowdownClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Result of the last import: accepted (with what changed) or refused (with why).
+                 A refusal must never be silent, so this Border is the one place both land. -->
+            <Border x:Name="ResultBorder" Padding="12" Stroke="Transparent" StrokeThickness="0" IsVisible="False">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="ResultTitleLabel" Style="{StaticResource LabelCaptionStyle}" />
+                    <Label x:Name="ResultLabel" LineBreakMode="WordWrap" Style="{StaticResource BodyStyle}" />
+                    <Label x:Name="ResultDetailLabel" LineBreakMode="WordWrap"
+                           Style="{StaticResource BodySecondaryStyle}" IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ============================ SAVE ============================ -->
+            <Button x:Name="SaveChangesBtn"
+                    Text="Save changes"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    IsEnabled="False"
+                    Clicked="OnSaveChangesClicked" />
+            <Label x:Name="SaveStatusLabel" Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
