@@ -8,9 +8,15 @@ public partial class PokemonDetailPage : ContentPage
     PKM? pk;
     SaveFile? parentSave;
     int partyIndex;
+    // Gen1/2 STRUCTURAL flag only (HP IV derived, SpA/SpD linked) - the numeric caps below are the
+    // library's own per-format answers, not a generation branch. See LoadPokemonCore.
     bool isGen12;
     int ivMax = 31;
     int evMax = 252;
+
+    // The Gen3+ sum-of-all-EVs budget, taken from PKHeX.Core rather than typed as 510, so the
+    // readout tracks the library if it ever changes. Advisory only - see RefreshEvTotal.
+    const int EvBudgetTotal = EffortValues.Max510;
 
     // Whether the Form/Ability/Nature pickers actually do anything on Write() for the currently
     // loaded Pokemon's format - see the "Form + Nature + Ability editing" section of PROGRESS.md
@@ -151,14 +157,25 @@ public partial class PokemonDetailPage : ContentPage
 
     private void LoadPokemonCore(PKM p)
     {
-        // Gen1/2 IVs are 4-bit hardware DVs (0-15), not the 5-bit 0-31 range Gen3+ uses.
-        // This mirrors PKHeX.WinForms, which sets NumericUpDown.Maximum to 15 for these
-        // generations' IV controls.
+        // Numeric IV/EV bounds come from the library, not from a hand-rolled generation ternary.
+        // PKM.MaxIV/MaxEV (PKM.cs:298-299) are abstract and overridden per format, so this is one
+        // expression covering every generation instead of a branch this app has to keep correct:
+        //   Gen1/2  MaxIV 15, MaxEV 65535 (GBPKM.cs:18-19 - real 16-bit Stat Exp, not 0-252 EVs)
+        //   Gen3/4  MaxIV 31, MaxEV   255 (G3PKM.cs:23-24, G4PKM.cs:24-25)
+        //   Gen5    MaxIV 31, MaxEV   255 (PK5.cs:306-307)
+        //   Gen6+   MaxIV 31, MaxEV   252 (G6PKM.cs:125-126, G8PKM.cs:54-55, PK9.cs:72-73)
+        // This also fixed a real defect: the previous hardcoded 252 under-capped Gen3/4/5, whose
+        // formats genuinely store up to 255, so a legitimate 253-255 in an existing save was
+        // silently clamped down to 252 on load and then written back at the clamped value.
+        //
+        // isGen12 deliberately SURVIVES this de-branching. It no longer carries any numeric
+        // meaning, only the Gen1/2 *structural* facts below (HP IV derived from the other four
+        // DVs' low bits, SpA/SpD sharing one "Special" value). Those have no generic library
+        // handle - ISeparateIVs, the obvious candidate, is implemented only by CK3/XK3
+        // (Colosseum/XD), not by GBPKM - so that logic stays hand-rolled on purpose.
         isGen12 = p.Generation is 1 or 2;
-        ivMax = isGen12 ? 15 : 31;
-        // Gen1/2 "EVs" are real 16-bit Stat Exp (0-65535), not the modern 0-252 EV system -
-        // confirmed against real Gen1/2 saves with maxed stat exp (see PROGRESS.md).
-        evMax = isGen12 ? 65535 : 252;
+        ivMax = p.MaxIV;
+        evMax = p.MaxEV;
 
         RefreshHero(p);
         NicknameEntry.Text = p.Nickname;
@@ -189,14 +206,24 @@ public partial class PokemonDetailPage : ContentPage
         IvHpEntry.IsEnabled = !isGen12;
         IvSpdEntry.IsEnabled = !isGen12;
         EvSpdEntry.IsEnabled = !isGen12;
+        // Ranges quoted from ivMax/evMax rather than literals, so the caption can never drift from
+        // the cap actually enforced (the old literal "0-252" was wrong on Gen3/4/5).
         IvRangeLabel.Text = isGen12
-            ? "IVs / DVs (0-15 each; HP derived, SpD linked to SpA)"
-            : "IVs (0-31 each)";
+            ? $"IVs / DVs (0-{ivMax} each; HP derived, SpD linked to SpA)"
+            : $"IVs (0-{ivMax} each)";
         EvRangeLabel.Text = isGen12
-            ? "EVs / Stat Exp (0-65535 each; SpD linked to SpA)"
-            : "EVs (0-252 each)";
+            ? $"EVs / Stat Exp (0-{evMax} each; SpD linked to SpA)"
+            : $"EVs (0-{evMax} each)";
+
+        // The 510-total budget is a Gen3+ concept only; PKHeX.Core's GetMaximumEV short-circuits
+        // to a flat EffortValues.Max12 for Format < 3. Hiding the readout on Gen1/2 also sidesteps
+        // a double-count that would otherwise be wrong there: Gen1/2 store ONE shared "Special"
+        // stat-exp value that the UI surfaces as two mirrored SpA/SpD fields, so naively summing
+        // all six on-screen fields would count it twice.
+        EvTotalLabel.IsVisible = p.Format >= 3;
 
         RefreshGen12DerivedFields();
+        RefreshEvTotal();
 
         PopulateSpeciesPicker(p);
         PopulateFormPicker(p);
@@ -480,7 +507,38 @@ public partial class PokemonDetailPage : ContentPage
     {
         ClampEntryToMax(sender as Entry, evMax);
         RefreshGen12DerivedFields();
+        RefreshEvTotal();
         MarkDirty();
+    }
+
+    // Live "EV total: n / 510" readout, computed from what's currently typed in the six fields
+    // (not from pk.EVTotal, which is the last-saved state and would lag every keystroke).
+    //
+    // Deliberately ADVISORY. PKHeX.Core does expose a hard answer - CommonEdits.GetMaximumEV(i)
+    // returns Clamp(510 - (EVTotal - thisEV), 0, 252) - but wiring that in as the field cap would
+    // do two wrong things here. It would (a) re-impose a 252 ceiling on Gen3/4/5, undoing the
+    // MaxEV fix above, since GetMaximumEV clamps to EffortValues.Max252 regardless of format, and
+    // (b) make the editor refuse an over-budget keystroke, i.e. enforce legality - which
+    // contradicts this app's stated stance (species/move/nature edits are applied exactly as
+    // chosen and reported on by the read-only legality badge, never blocked). So: surface it,
+    // recolour it, don't prevent it.
+    private void RefreshEvTotal()
+    {
+        if (!EvTotalLabel.IsVisible)
+            return;
+
+        int total = 0;
+        foreach (var entry in new[] { EvHpEntry, EvAtkEntry, EvDefEntry, EvSpaEntry, EvSpdEntry, EvSpeEntry })
+        {
+            if (int.TryParse(entry.Text, out var v) && v > 0)
+                total += v;
+        }
+
+        bool over = total > EvBudgetTotal;
+        EvTotalLabel.Text = over
+            ? $"EV total: {total} / {EvBudgetTotal} — over budget (allowed here; the legality check will flag it)"
+            : $"EV total: {total} / {EvBudgetTotal}";
+        EvTotalLabel.TextColor = (Color)Application.Current!.Resources[over ? "StatusWarnFg" : "TextTertiary"];
     }
 
     private static void ClampEntryToMax(Entry? entry, int max)

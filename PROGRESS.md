@@ -1372,3 +1372,98 @@ the interrupted agent never reached.
   `OnMoveSelectionChanged` handler rather than stacked as two subscriptions -
   the chip must repaint during `LoadPokemon`'s programmatic population, while
   `MarkDirty` must stay suppressed by `isLoading` for exactly that window.)
+
+## EV/IV caps taken from the library, and the 510 budget surfaced (2026-07-22)
+
+`CAPABILITY-AUDIT.md` §4.1 (gap #4) flagged the app's hardcoded stat bounds
+as a genuine correctness defect *and* a de-branching win. Both halves shipped,
+but **not the way the audit's own recommendation phrased it** - see the
+contradiction below, which the harness settles empirically.
+
+### The de-branch and the defect it fixed
+
+`PokemonDetailPage.LoadPokemonCore` previously computed:
+
+```
+isGen12 = p.Generation is 1 or 2;
+ivMax   = isGen12 ? 15 : 31;
+evMax   = isGen12 ? 65535 : 252;
+```
+
+now simply `ivMax = p.MaxIV; evMax = p.MaxEV;` - both abstract on `PKM.cs:298-299`
+and overridden per format. Verified per generation in
+`verify/DetailFieldEdits/Program.cs` (part A1) against real saves:
+
+| Format | `MaxIV` | `MaxEV` | old hardcoded `evMax` | |
+|---|---|---|---|---|
+| Gen1/2 (`GBPKM.cs:18-19`) | 15 | 65535 | 65535 | ✅ unchanged |
+| Gen3 (`G3PKM.cs:23-24`) | 31 | **255** | 252 | ❌ was wrong |
+| Gen4 (`G4PKM.cs:24-25`) | 31 | **255** | 252 | ❌ was wrong |
+| Gen5 (`PK5.cs:306-307`) | 31 | **255** | 252 | ❌ was wrong |
+| Gen6+ (`G6PKM`/`G8PKM`/`PK9`) | 31 | 252 | 252 | ✅ unchanged |
+
+The Gen3/4/5 rows are a real data-loss bug, not a cosmetic cap: `LoadPokemon`
+populates each field via `Math.Clamp(p.EV_X, 0, evMax)`, so a save that
+genuinely held 253-255 was **displayed clamped to 252 and then written back at
+the clamped value** - the same failure shape as the already-fixed Gen1/2
+`byte.TryParse("65535")` bug, an over-narrow cap destroying real data.
+`verify/DetailFieldEdits` part A2 confirms 255 round-trips through
+`Write()`/`GetSaveFile` on real Gen3, Gen4 and Gen5 saves *and* that it
+actually reaches the stat block (+57/+57/+63 Atk), not merely that the getter
+echoes it back.
+
+### Where the audit's own recommendation was wrong, and why the app didn't follow it
+
+§4.1 recommends replacing the ternaries with "`pk.MaxIV` / `pk.GetMaximumEV(i)`"
+and says this fixes both the Gen3-5 under-cap *and* adds 510-budget
+enforcement. Those two goals are in direct conflict, because
+`CommonEdits.cs:329-337` reads:
+
+```
+if (pk.Format < 3) return EffortValues.Max12;
+return Math.Clamp(510 - (EVTotal - thisEV), 0, EffortValues.Max252);
+```
+
+`GetMaximumEV` **clamps to 252 regardless of format**. Adopting it as the field
+cap would therefore have re-imposed exactly the 252 ceiling this change exists
+to remove. Confirmed empirically rather than by reading alone - part A5, on a
+real Gen3 save with all six EVs zeroed (i.e. maximum possible headroom):
+`GetMaximumEV(ATK) = 252` while `pk.MaxEV = 255`.
+
+So the two concerns were split:
+
+- **Field cap → `pk.MaxEV`/`pk.MaxIV`** (the format's true storage limit). Live
+  clamp, load-time backstop and save-time validation all now quote it.
+- **510 budget → an advisory caption, not a clamp.** A new `EvTotalLabel`
+  shows "EV total: n / 510" live from what is currently typed (not from
+  `pk.EVTotal`, which is last-saved state and would lag every keystroke), and
+  recolours to `StatusWarnFg` with an "over budget" note past 510.
+
+Making the budget advisory rather than enforced is a deliberate consistency
+call, not laziness: this app's stated stance is that **edits are applied
+exactly as chosen and legality is reported, never enforced** - that is what the
+permanent warning banner and the read-only `LegalityAnalysis` badge are for,
+and the species/move/nature editors already build illegal mons freely. An
+editor that refuses an over-budget keystroke would be the one place enforcing
+a legality rule. The caption is hidden entirely on Gen1/2, which have no 510
+concept (the library short-circuits to `Max12` for `Format < 3`); hiding it
+there also sidesteps a double-count, since Gen1/2's single shared "Special"
+stat-exp value is surfaced as two mirrored SpA/SpD fields.
+
+### What deliberately did NOT change
+
+`isGen12` survives - it no longer carries any numeric meaning, only the Gen1/2
+**structural** facts: HP IV derived from the other four DVs' low bits, and
+SpA/SpD sharing one "Special" value. §4.1's own scope limit is right that these
+have no generic library handle (`ISeparateIVs`, the obvious candidate, is
+implemented only by `CK3`/`XK3`, not `GBPKM`), so that logic stays hand-rolled
+on purpose. Part A4 of the harness pins it: on real Gen1 *and* Gen2 saves, HP
+DV still derives from the other four (`IV_HP=11` for the probe values), SpD
+still moves with SpA, and the library still clamps an over-range DV to 15.
+Part A3 separately re-confirms 16-bit stat exp (65535 on Gen1, 54321 on Gen2)
+still round-trips with the stat block tracking it - the behaviour the
+"Gen1/2 EV save-blocking bug fixed" session established.
+
+The range captions are now interpolated from `ivMax`/`evMax` rather than
+written as literals, so a caption can no longer drift from the cap actually
+enforced (the old literal "EVs (0-252 each)" was itself wrong on Gen3/4/5).
