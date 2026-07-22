@@ -1,21 +1,123 @@
 # WAKEUP — read this first
 
-**Session completed 2026-07-22.** All three handoff items from the previous
-session were done, in order, sequentially (no parallel subagents - this
-project's own §8 cost lessons apply to solo sessions too, not just
-multi-agent ones). Working tree is clean, everything pushed to
+**Session completed 2026-07-22, in two parts.** Part 1 (below the fold)
+closed the previous session's three handoff items. Part 2, at the very top
+of this file, ran two tracks in parallel: Track A (a subagent) audited the
+docs and mapped remaining PKHeX.Core capability into `CAPABILITY-GAPS.md`;
+Track B (this session, main thread) added per-move legality indicators,
+did a manual on-device bug hunt, and closed out Ball/Friendship editing.
+Working tree is clean, everything pushed to
 `github.com/abhishek-rathod01/pkhex-mobile`. `dotnet build` = **0 errors**,
 7 warnings (pre-existing `CS8622` nullability on `PokemonTransferPage`
-event handlers - cosmetic, not fixed this session, not new).
+event handlers - cosmetic, unrelated to this session).
 
 > Start here, then read `CLAUDE.md` (build commands, API traps, the
-> recurring per-generation no-op bug class, conventions). `CAPABILITY-AUDIT.md`
-> is the prioritized map of what PKHeX.Core offers vs. what the app exposes.
-> `PROGRESS.md` is the long-form feature history - it now has a "Navigation
-> wiring + consolidated on-device pass" section covering everything below in
-> full detail.
+> recurring per-generation no-op bug class, conventions). `CAPABILITY-GAPS.md`
+> (new this session) is now the current priority map of unexposed PKHeX.Core
+> capability - see "Next candidates" below for its top items.
+> **`CAPABILITY-AUDIT.md` is now a stale planning snapshot** (see that
+> section below) - don't trust its §1/§2 tables without cross-checking
+> `CAPABILITY-GAPS.md` first. `PROGRESS.md` is the long-form feature history.
 
 ---
+
+## Part 2 (most recent) — Two-track session: docs/gaps audit + on-device bug hunt
+
+### Track A (subagent, read-only): `CAPABILITY-GAPS.md`
+
+Audited `PROGRESS.md`/`WAKEUP.md`/`CLAUDE.md` against the live repo (all
+three accurate - no discrepancies) and found **`CAPABILITY-AUDIT.md` is
+stale**: it's a pre-build planning snapshot (committed `3b75c12` at 01:12,
+*before* the same-day P1/P2 build-out), and its own §1/§2 tables were never
+refreshed - ~11 rows still say `❌ not integrated` for features that
+shipped later the same day (Trainer screen, held-item editing, EV caps,
+box rename/sort/clear, `.pk`/Showdown import+export, Pokédex display).
+`CLAUDE.md` still points readers to it as the current map. **Not fixed
+this session** (Track A was read-only by design) - refresh it or add a
+superseded banner next time someone's in that area.
+
+Also cataloged every confirmed-unexposed PKHeX.Core capability into
+`CAPABILITY-GAPS.md`, priority-ordered - see "Next candidates" below for
+the short version.
+
+### Track B (main thread): three pieces of work, all pushed
+
+1. **Per-move legality indicators** - each of the 4 move rows now has a
+   pass/fail dot sourced from `LegalityAnalysis.Info.Moves[i]` (the
+   library's own per-slot verdict), plus a reason caption for whichever
+   move(s) are actually illegal. Verified against a real Gen9 save both
+   library-level (`verify/MoveLegalityIndicator`) and on-device
+   (`verify/OnDeviceMoveLegality/`).
+
+2. **Manual on-device bug hunt - two real bugs found and fixed:**
+   - **Box Management panel content collapsing to zero height.** Opening
+     the Boxes screen's "Manage" panel showed only the box picker and
+     read-only "Box details" card - "Rename box" and "Box tools"
+     (sort/compact/delete-all) existed in the UI tree but were completely
+     unreachable by scrolling, on every fresh open. Root cause: a
+     `ScrollView` that starts `IsVisible="False"` is never correctly
+     measured by the Android renderer the first time it's shown, and the
+     same collapse could recur after any later refresh. Fixed with
+     `InvalidateMeasure()`. Confirmed fixed on-device, including actually
+     running Sort/Rename afterward.
+   - **A real, previously-undiscovered "as if traded" side-effect bug**,
+     found while verifying the new Friendship field's round-trip: even a
+     **nickname-only edit** on a real Gen9 save was silently flipping
+     `CurrentHandler` and fabricating Handling Trainer data (name/gender/
+     language/friendship) on every single save, because
+     `PokemonDetailPage.OnSaveChangesClicked`'s `SetPartySlotAtIndex` call
+     (and `EntityTransferService.WriteIntoPartySlot`, used by the .pk/
+     Showdown transfer page) both omitted `EntityImportSettings.None` -
+     `PokemonSlotMover.cs` already had this exact guard, documented, for
+     the same reason; these two call sites just never got it. **This bug
+     has been live since the nickname/level editor first shipped** - it
+     was invisible until a field's correctness started depending on
+     reading back through the handler-routed getter. Fixed both call
+     sites; verified library-level (`verify/BallFriendshipEdit`) and
+     on-device that `CurrentHandler` no longer flips.
+
+3. **Ball + Friendship editing** (closes an item this file previously
+   listed as "genuinely not implemented" - see corrected list below).
+   Ball real from Gen3 (Gen1/2 hard no-op, `GBPKM.cs:135`); Friendship real
+   from Gen2 (Gen1 hard no-op, `PK1.cs:155`; Gen3/4/5 alias
+   `OriginalTrainerFriendship`, a genuine write under a different name,
+   not a no-op). Same disable-but-show-the-truth pattern as the existing
+   Held Item/Ability/Nature/Form fields.
+
+All work commits: `00565f3` (move legality), `a3b5165` (CAPABILITY-GAPS.md),
+`e394ab6` (Box Management fix), `34e0b72` (Ball/Friendship + the
+EntityImportSettings fix).
+
+### Next candidates (from `CAPABILITY-GAPS.md`, highest value/lowest effort first)
+
+Ball and Friendship (items #1/#2 in the gap analysis) are now done - the
+next Tier A items, all small:
+
+- **Pokémon-level Gender editing** - `pk.Gender`, real from Gen4
+  (`PK4.cs:170`). Identical shape to the shipped Nature/Ability pickers.
+  `CAPABILITY-AUDIT.md` under-scoped this (buried in its traps section
+  instead of the main feature table).
+- **Manual PP / PP-Ups editing** - `pk.Move1_PP..4_PP`/`Move1_PPUps..`,
+  uniform across all generations. The app only ever calls `SetMoves`
+  (auto-max PP) today.
+- **Three read-only-safe display additions** (no legality-warning
+  treatment needed, same shape as the existing legality badge/type chips):
+  computed final stats (`Stat_HPMax`/`Stat_ATK`/etc. - the app shows the
+  *inputs* but never the resulting battle numbers), species type chip(s)
+  (reuses the move-type-chip component that already exists), and Hidden
+  Power type/power (derived from IVs, Gen2-7).
+- **Locked-slot guard in `PokemonSlotMover.MoveOrSwap`** - a hardening
+  item, not a feature: `BoxManagement`'s bulk sort/clear ops already check
+  `sav.IsAnySlotLockedInBox`; the per-slot move/swap path doesn't. One
+  guard, prevents overwriting battle-box/daycare/in-transit slots on later
+  gens.
+
+Full priority-ordered list with API citations, sizes, and per-generation
+scope in `CAPABILITY-GAPS.md`.
+
+---
+
+## Part 1 — Previous handoff's three items (closed out earlier this session)
 
 ## What's still NOT on-device verified or still blocked (read this first)
 
@@ -25,13 +127,11 @@ event handlers - cosmetic, not fixed this session, not new).
   This is a documented ADB/automation limitation, not a suspected app bug -
   the tap-to-select fallback for the same operation *has* been verified
   on-device repeatedly. Needs a human with a real finger to close out.
-- **Ball and friendship editing are genuinely not implemented** (not just
-  undocumented - confirmed by grep, no trace in `PokemonDetailPage.xaml.cs`).
-  Held item editing, which a previous handoff *also* listed as "not
-  started," was actually fully implemented and has now been verified
-  on-device this session - see below. Don't assume anything else in that
-  old list is still accurate without re-checking the code first; this
-  session found one item in it was already wrong.
+- **Ball and Friendship editing are now implemented** (see Part 2 above) -
+  this bullet used to say "genuinely not implemented," confirmed by grep
+  at the time. Don't assume anything else in the "not started" list below
+  is still accurate without re-checking the code first; two items in it
+  (held item, now this) turned out to be wrong across two passes.
 - **Gen 8 Legends Arceus specifically** has no real save file in this
   project's inventory (`pcdata-legendes Arceus.bin` is a box-only partial
   dump, not a main save) - Gen 8 verification rests on Sword/HeartGold.
@@ -107,8 +207,9 @@ before. Screenshots in `verify/OnDeviceNavAudit/screenshots/`.
 
 ## Corrected roadmap / not started (as of this session)
 
-- **Ball, friendship editing** - genuinely not implemented (confirmed by
-  code search, not assumption).
+- **Ball, friendship editing** - now implemented, see Part 2 above. (Was
+  genuinely not implemented as of the previous pass in this file - this
+  entry is kept to show the correction, not because it's still true.)
 - **Pokédex completion display** - a prior `WAKEUP.md` filed this as "not
   built," which was wrong: `TrainerInfoPage.PopulateDex` implements it
   (Seen/Caught/Complete %, gated on `sav.HasPokeDex`) and it's now been
