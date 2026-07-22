@@ -11,4 +11,12 @@
     <ProjectReference Include="..\..\vendor\PKHeX.Core\PKHeX.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Link the actual production capability probe, not a copy - this harness's whole job is to
+         prove the exact gate the app ships is correct on real saves, and a re-implementation could
+         quietly drift from it. Same convention as verify/BoxPartyMove. TrainerFieldSupport.cs is
+         deliberately free of MAUI types so it can be compiled into a plain console project. -->
+    <Compile Include="..\..\PkhexMobile\TrainerFieldSupport.cs" Link="TrainerFieldSupport.cs" />
+  </ItemGroup>
+
 </Project>

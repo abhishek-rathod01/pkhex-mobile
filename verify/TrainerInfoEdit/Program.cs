@@ -1,4 +1,5 @@
 using PKHeX.Core;
+using PkhexMobile;
 
 // Determines, EMPIRICALLY AND PER GENERATION, which of SaveFile's generic trainer-level fields
 // actually round-trip through Write() + SaveUtil.GetSaveFile(byte[]) - i.e. which ones a
@@ -51,29 +52,41 @@ var targets = new (string Path, string Label)[]
     (Path.Combine(root, "main"),                                         "Gen7"),
     (Path.Combine(root, @"pokemonsword_100\main"),                       "Gen8"),
     (Path.Combine(root, @"pkmnscarlet_100\main"),                        "Gen9"),
+
+    // The edge case the whole capability-probe design exists for. SAV3RSBox is the GameCube
+    // "Pokemon Box: Ruby & Sapphire" storage dump. It reports Generation == 3 but overrides NONE of
+    // the trainer members, so it inherits SaveFile's do-nothing defaults and reports OT "PKHeX",
+    // Language -1, and 0 for every number. Any Generation-based gate would have shipped a fully
+    // enabled trainer editor over values that are not in the file and can never be written back.
+    // Genuinely reachable, not hypothetical: SaveUtil.GetSaveFile on the raw .gci bytes - exactly
+    // the call MainPage makes on whatever the file picker hands it - detects it as a SAV3RSBox.
+    (Path.Combine(root, "01-GPXP-pokemon_rs_memory_box.gci"),             "Gen3RSBox"),
 };
 
 var rows = new List<Row>();
+var supportRows = new List<SupportRow>();
 var allOk = true;
 
 foreach (var (path, label) in targets)
 {
-    allOk &= TestSave(path, label, rows);
+    allOk &= TestSave(path, label, rows, supportRows);
     Console.WriteLine();
 }
 
 PrintMatrix(rows);
+PrintSupportMatrix(supportRows);
 
 var hadError = rows.Any(r => r.Verdict is Verdict.Error);
+var hadMismatch = supportRows.Any(r => !r.Agrees);
 Console.WriteLine();
-Console.WriteLine(allOk && !hadError
-    ? "=== HARNESS COMPLETED: no errors, no original file modified ==="
+Console.WriteLine(allOk && !hadError && !hadMismatch
+    ? "=== HARNESS COMPLETED: no errors, production probe agrees on every field, no original file modified ==="
     : "=== HARNESS FAILED: see errors above ===");
-return allOk && !hadError ? 0 : 1;
+return allOk && !hadError && !hadMismatch ? 0 : 1;
 
 // ---------------------------------------------------------------------------------------------
 
-static bool TestSave(string path, string gen, List<Row> rows)
+static bool TestSave(string path, string gen, List<Row> rows, List<SupportRow> supportRows)
 {
     Console.WriteLine($"##################### {gen}  —  {Path.GetFileName(path)} #####################");
     if (!File.Exists(path))
@@ -98,6 +111,12 @@ static bool TestSave(string path, string gen, List<Row> rows)
     Console.WriteLine($"  Current: OT='{ctx.OT}' Gender={ctx.Gender} Language={ctx.Language}({(LanguageID)ctx.Language})");
     Console.WriteLine($"           TrainerTID7={ctx.TrainerTID7} TrainerSID7={ctx.TrainerSID7} DisplayTID={ctx.DisplayTID} DisplaySID={ctx.DisplaySID} (TID16={ctx.TID16} SID16={ctx.SID16} ID32={ctx.ID32})");
     Console.WriteLine($"           Money={ctx.Money} Played={ctx.PlayedHours}:{ctx.PlayedMinutes:00}:{ctx.PlayedSeconds:00}");
+    // Pokedex is read-only in the UI (CAPABILITY-AUDIT.md 5.3: SetSeen/SetCaught are `virtual { }`
+    // on the base and overridden by only five save classes, so dex WRITING is a silent no-op on
+    // Gen4/5/7/8/9). Dumped here anyway because the card's numbers are only as trustworthy as the
+    // getters, and HasPokeDex is what gates the card - it is false for storage-only dumps.
+    Console.WriteLine($"  Dex: HasPokeDex={ctx.HasPokeDex} Seen={ctx.SeenCount} Caught={ctx.CaughtCount} "
+                      + $"MaxSpeciesID={ctx.MaxSpeciesID} PercentCaught={ctx.PercentCaught:P2}");
     Console.WriteLine();
 
     var ok = true;
@@ -171,7 +190,82 @@ static bool TestSave(string path, string gen, List<Row> rows)
     ok &= ProbeOtOverlength(path, gen);
     ok &= ProbeOtCharset(path, gen);
 
+    // --- The production gate, checked against the ground truth just measured -------------------
+    ok &= CrossCheckProductionProbe(path, gen, rows, supportRows);
+
     return ok;
+}
+
+// The point of the whole harness. TrainerFieldSupport is the class the app actually ships (linked
+// into this project via <Compile Include>, not copied), and it decides on its own - from ONE batched
+// Write()+reload of a throwaway Clone - which controls TrainerInfoPage enables. Here that verdict is
+// held against the nine independent single-field round trips measured above.
+//
+// Two distinct things get proven, and neither is decoration:
+//   1. The gate is CORRECT. The disable direction is the safety-critical one (enabling a field that
+//      silently discards edits is the exact bug class this project keeps hitting), and no amount of
+//      source reading substitutes for measuring it on a real file of each generation.
+//   2. The BATCHING is sound. The production probe sets all nine sentinels before a single Write(),
+//      which is ~9x cheaper on a multi-megabyte Gen9 save but only valid if no sentinel disturbs
+//      another's field. The per-field probes above set exactly one field each, so any cross-talk
+//      shows up here as a disagreement rather than being assumed absent.
+static bool CrossCheckProductionProbe(string path, string gen, List<Row> rows, List<SupportRow> supportRows)
+{
+    var bytes = File.ReadAllBytes(path);
+    var diskSnapshot = (byte[])bytes.Clone();
+    var sav = SaveUtil.GetSaveFile(bytes);
+    if (sav is null)
+        return false;
+
+    var support = TrainerFieldSupport.Probe(sav);
+
+    Console.WriteLine("  --- production TrainerFieldSupport probe vs. the ground truth above ---");
+    Console.WriteLine($"  {"probe",-14} AnySupported={support.AnySupported} HoursCeiling={support.HoursCeiling}"
+                      + (support.ProbeError is null ? "" : $" ProbeError='{support.ProbeError}'"));
+
+    var ok = true;
+    foreach (var field in TrainerFieldSupport.AllFields)
+    {
+        var truthRow = rows.FirstOrDefault(r => r.Gen == gen && r.Field == field.ToString());
+        if (truthRow is null)
+        {
+            Console.WriteLine($"  {field,-14} SKIP  (no ground-truth row)");
+            continue;
+        }
+
+        // Anything short of a clean round-trip must read as "don't enable this control": NoOp and
+        // Phantom obviously, but Normalized too - a value that comes back altered is not one the
+        // user asked for, and an editor that quietly rewrites input is its own bug.
+        var expected = truthRow.Verdict is Verdict.Persists;
+        var actual = support[field];
+        var agrees = expected == actual;
+        ok &= agrees;
+        supportRows.Add(new SupportRow(gen, field.ToString(), expected, actual));
+
+        Console.WriteLine($"  {field,-14} {(agrees ? "agree " : "MISMATCH")}  groundTruth={truthRow.Verdict}(editable={expected}) productionProbe={actual}");
+    }
+
+    // The probe clones before it mutates; prove that claim rather than trusting it. If Clone() ever
+    // shared its buffer, the sentinel junk would be sitting in the live save right now.
+    var savUntouched = sav.OT == ctxOtOf(diskSnapshot) ;
+    if (!savUntouched)
+    {
+        Console.WriteLine($"  {"probe(isolation)",-14} FAIL: the live SaveFile's OT was mutated by the probe (now '{sav.OT}')");
+        ok = false;
+    }
+    else
+    {
+        Console.WriteLine($"  {"probe(isolation)",-14} live SaveFile untouched by the probe (OT still '{sav.OT}')");
+    }
+
+    if (!File.ReadAllBytes(path).AsSpan().SequenceEqual(diskSnapshot))
+    {
+        Console.WriteLine($"  {"probe(disk)",-14} WARNING: ORIGINAL FILE ON DISK CHANGED - this must never happen.");
+        ok = false;
+    }
+    return ok;
+
+    static string ctxOtOf(byte[] snapshot) => SaveUtil.GetSaveFile((byte[])snapshot.Clone())?.OT ?? "<unreadable>";
 }
 
 // Core probe: fresh load -> read -> mutate -> read (in-memory) -> Write() -> reload -> read.
@@ -422,6 +516,35 @@ static void PrintMatrix(List<Row> rows)
     Console.WriteLine("NORMALIZED = persisted but altered (clamped/truncated/re-encoded)");
 }
 
+static void PrintSupportMatrix(List<SupportRow> rows)
+{
+    var fields = rows.Select(r => r.Field).Distinct().ToList();
+    var gens = rows.Select(r => r.Gen).Distinct().ToList();
+
+    Console.WriteLine();
+    Console.WriteLine("======================= PRODUCTION GATE (TrainerFieldSupport) =======================");
+    Console.WriteLine("What TrainerInfoPage actually enables. 'on'/'off' = the shipped probe's verdict;");
+    Console.WriteLine("a MISMATCH cell means it disagrees with the measured round-trip and the gate is wrong.");
+    Console.WriteLine("| Field | " + string.Join(" | ", gens) + " |");
+    Console.WriteLine("|---|" + string.Concat(gens.Select(_ => "---|")));
+    foreach (var f in fields)
+    {
+        var cells = gens.Select(g =>
+        {
+            var r = rows.FirstOrDefault(x => x.Gen == g && x.Field == f);
+            if (r is null)
+                return "-";
+            return r.Agrees ? (r.Actual ? "on" : "off") : $"MISMATCH(exp {r.Expected}, got {r.Actual})";
+        });
+        Console.WriteLine($"| {f} | " + string.Join(" | ", cells) + " |");
+    }
+}
+
 enum Verdict { Persists, NoOp, Phantom, Normalized, Inconclusive, Error }
 
 record Row(string Gen, string Field, Verdict Verdict, string Detail);
+
+record SupportRow(string Gen, string Field, bool Expected, bool Actual)
+{
+    public bool Agrees => Expected == Actual;
+}

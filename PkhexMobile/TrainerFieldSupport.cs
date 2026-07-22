@@ -3,7 +3,7 @@ using PKHeX.Core;
 namespace PkhexMobile;
 
 /// <summary>
-/// The save-level trainer fields <see cref="TrainerInfoPage"/> can offer for editing.
+/// The save-level trainer fields <c>TrainerInfoPage</c> can offer for editing.
 /// </summary>
 public enum TrainerField
 {

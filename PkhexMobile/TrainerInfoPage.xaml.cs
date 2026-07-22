@@ -367,6 +367,15 @@ public partial class TrainerInfoPage : ContentPage
                 if (name.Length > sav.MaxStringLengthTrainer)
                     name = name[..sav.MaxStringLengthTrainer];
 
+                // A blank OT round-trips cleanly (empty in, empty out), so the charset check below
+                // would wave it through - but every generation's trainer name is non-empty in a real
+                // save, and clearing the field is far more likely to be a slip than an intent.
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    SaveStatusLabel.Text = "OT name can't be blank.";
+                    return;
+                }
+
                 // Charset check by round-trip through PKHeX.Core's own converter, rather than a
                 // hardcoded per-generation allowed-character list. Gen1/2 use a bespoke single-byte
                 // table where most non-ASCII input has no representation at all (verified: it comes
