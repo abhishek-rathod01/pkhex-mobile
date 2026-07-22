@@ -97,6 +97,21 @@
                         </Border>
                         <Picker Grid.Column="1" x:Name="ItemPicker" Title="Select held item" />
                     </Grid>
+
+                    <!-- Ball: editable Gen3+ via pk.Ball (real storage, incl. Gen4's composite
+                         BallDPPt/BallHGSS handled internally by the sealed override). Gen1/2 share
+                         GBPKM's hard no-op (GBPKM.cs:135, get => 0; set { } - RBY/GSC never stored
+                         which ball caught the Pokemon), so disabled there with the reason inline. -->
+                    <Label x:Name="BallCaptionLabel" Text="Ball" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="BallPicker" Title="Select ball" />
+
+                    <!-- Friendship: editable Gen2+ via pk.CurrentFriendship. Gen1 is a hard no-op
+                         (PK1.cs:155, get => 0; set { } - RBY has no friendship stat at all). Gen3/4/5
+                         genuinely persist the value (verified against PKM sources) - they just alias
+                         the same storage as OriginalTrainerFriendship, which is a naming/semantic
+                         quirk (see PROGRESS.md), not a no-op, so no extra gating is needed for them. -->
+                    <Label x:Name="FriendshipCaptionLabel" Text="Friendship" Style="{StaticResource LabelCaptionStyle}" />
+                    <Entry x:Name="FriendshipEntry" Keyboard="Numeric" />
                 </VerticalStackLayout>
             </Border>
 

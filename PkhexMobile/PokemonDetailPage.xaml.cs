@@ -29,6 +29,11 @@ public partial class PokemonDetailPage : ContentPage
     // Held item is real from Gen2 on; Gen1's setter is a hard no-op (PK1.cs:157 - that byte is the
     // catch rate). Same disable-but-show-the-truth treatment as the three above.
     bool heldItemEditable;
+    // Ball is real from Gen3 on (incl. Gen4's composite BallDPPt/BallHGSS, handled internally by
+    // the sealed override); Gen1/2 share GBPKM's hard no-op (GBPKM.cs:135). Friendship is real from
+    // Gen2 on; Gen1 is a hard no-op (PK1.cs:155). Same treatment as the four above.
+    bool ballEditable;
+    bool friendshipEditable;
 
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
@@ -49,6 +54,8 @@ public partial class PokemonDetailPage : ContentPage
     // IDs are filtered out of the visible list, so this parallel list is what maps a picker index
     // back to a real item ID.
     readonly List<int> itemIds = new();
+    // Ball enum values in balllist's own index order (0 = None) - see PopulateBallPicker.
+    readonly List<int> ballIds = new();
 
     // Move type byte -> Colors.xaml "Type*" token name, in PKHeX's OWN type-byte order (i.e. the
     // index order of GameInfo.Strings.Types, verified in verify/MoveTypes). This deliberately is
@@ -98,6 +105,8 @@ public partial class PokemonDetailPage : ContentPage
         // LoadPokemon too, while MarkDirty stays suppressed by isLoading - so both live in one
         // handler rather than as two subscriptions.
         ItemPicker.SelectedIndexChanged += (_, _) => OnHeldItemSelectionChanged();
+        BallPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        FriendshipEntry.TextChanged += (_, _) => { ClampEntryToMax(FriendshipEntry, 255); MarkDirty(); };
         // One handler per move Picker, not two - the type chip has to refresh on every selection
         // change (including the programmatic ones LoadPokemon fires), while MarkDirty must stay
         // suppressed during load. Those are different concerns on the same event, so they're
@@ -273,6 +282,8 @@ public partial class PokemonDetailPage : ContentPage
         PopulateNaturePicker(p);
 
         PopulateHeldItem(p);
+        PopulateBallPicker(p);
+        PopulateFriendship(p);
         RefreshLegality(p);
 
         SaveStatusLabel.Text = string.Empty;
@@ -358,6 +369,55 @@ public partial class PokemonDetailPage : ContentPage
     {
         int idx = ItemPicker.SelectedIndex;
         return idx >= 0 && idx < itemIds.Count ? itemIds[idx] : 0;
+    }
+
+    // Ball: real, independently-stored, working setter from Gen3 on - GameInfo.Strings.balllist is
+    // already indexed by the Ball enum's own byte values (0 = None), not a separate item ID space
+    // like held items, so no ID-space conversion is needed here. Gen1/2 share GBPKM's hard no-op
+    // (GBPKM.cs:135), so the getter always reads 0 ("None") there - shown and disabled, same
+    // precedent as the other four disable-but-show-the-truth fields on this page.
+    private void PopulateBallPicker(PKM p)
+    {
+        var names = GameInfo.Strings.balllist;
+        int max = Math.Min(p.MaxBallID, names.Length - 1);
+
+        ballIds.Clear();
+        var items = new List<string>(max + 1);
+        for (int id = 0; id <= max; id++)
+        {
+            ballIds.Add(id);
+            items.Add(names[id]);
+        }
+        BallPicker.ItemsSource = items;
+
+        ballEditable = p.Generation >= 3;
+        BallPicker.IsEnabled = ballEditable;
+        BallCaptionLabel.Text = ballEditable
+            ? "Ball"
+            : "Ball (not stored before Gen 3 - see PROGRESS.md)";
+
+        int sel = ballIds.IndexOf(p.Ball);
+        BallPicker.SelectedIndex = sel >= 0 ? sel : 0;
+    }
+
+    private int BallIdFor()
+    {
+        int idx = BallPicker.SelectedIndex;
+        return idx >= 0 && idx < ballIds.Count ? ballIds[idx] : 0;
+    }
+
+    // Friendship: real, independently-stored, working setter from Gen2 on. Gen3/4/5 alias
+    // OriginalTrainerFriendship (G3PKM.cs:39, G4PKM.cs:52, PK5.cs:56) - a genuine write to real
+    // storage, just under a differently-purposed field name, not a no-op. Gen1 is a hard no-op
+    // (PK1.cs:155, get => 0; set { } - RBY has no friendship stat at all).
+    private void PopulateFriendship(PKM p)
+    {
+        friendshipEditable = p.Generation >= 2;
+        FriendshipEntry.IsEnabled = friendshipEditable;
+        FriendshipEntry.Text = p.CurrentFriendship.ToString();
+        FriendshipCaptionLabel.Text = friendshipEditable
+            ? "Friendship (0-255)"
+            : "Friendship (not stored in Gen 1 - see PROGRESS.md)";
     }
 
     // Read-only legality snapshot (PKHeX.Core's own LegalityAnalysis, no changes made to it and no
@@ -815,6 +875,29 @@ public partial class PokemonDetailPage : ContentPage
         if (heldItemEditable)
             newHeldItem = HeldItemIdFor();
 
+        int newBall = pk.Ball;
+        if (ballEditable)
+        {
+            if (BallPicker.SelectedIndex < 0 || BallPicker.SelectedIndex >= ballIds.Count)
+            {
+                SaveStatusLabel.Text = "Select a ball before saving.";
+                return;
+            }
+            newBall = ballIds[BallPicker.SelectedIndex];
+        }
+
+        int newFriendship = pk.CurrentFriendship;
+        if (friendshipEditable)
+        {
+            if (!TryParseStat(FriendshipEntry.Text, 255, out var friendship))
+            {
+                // Defensive backstop: the live clamp handler already prevents typing past 255.
+                SaveStatusLabel.Text = "Friendship must be a number between 0 and 255.";
+                return;
+            }
+            newFriendship = friendship;
+        }
+
         bool heldItemChanged = heldItemEditable && newHeldItem != pk.HeldItem;
         bool speciesChanged = newSpecies != pk.Species;
         bool formChanged = formEditable && newForm != pk.Form;
@@ -881,6 +964,14 @@ public partial class PokemonDetailPage : ContentPage
             if (heldItemEditable)
                 pk.ApplyHeldItem(newHeldItem, pk.Context);
 
+            // Ball and Friendship don't feed the stat block (battle mechanics / an OT-relationship
+            // counter, not a computed stat), so - like Ability - deliberately absent from
+            // statsAffected.
+            if (ballEditable)
+                pk.Ball = (byte)newBall;
+            if (friendshipEditable)
+                pk.CurrentFriendship = (byte)newFriendship;
+
             pk.IV_HP = ivHp;
             pk.IV_ATK = ivAtk;
             pk.IV_DEF = ivDef;
@@ -905,7 +996,17 @@ public partial class PokemonDetailPage : ContentPage
             if (statsAffected)
                 pk.ResetPartyStats();
 
-            parentSave.SetPartySlotAtIndex(pk, partyIndex);
+            // EntityImportSettings.None, not the implicit default: SaveFile.SetPartySlotAtIndex's
+            // default setting resolves to SaveFile.SetUpdatePKM (a static, defaults to Enable),
+            // which calls SetPKM -> pk.UpdateHandler(this) - logic that conditions the entity "as
+            // if it was traded" into this save (SaveFile.cs's own doc comment on AdaptToSaveFile).
+            // For a mon that already lives in this exact party slot and is only being edited in
+            // place, that's wrong: found on-device that even a NICKNAME-ONLY edit could flip
+            // CurrentHandler and fabricate Handling Trainer data (name/gender/language/friendship)
+            // on a real Gen9 save, silently, on every single save. PokemonSlotMover.cs already
+            // established the correct fix for the same-save case (see its own comment); this path
+            // needed the identical guard and didn't have it until now.
+            parentSave.SetPartySlotAtIndex(pk, partyIndex, EntityImportSettings.None);
 
             var bytes = parentSave.Write().ToArray();
 

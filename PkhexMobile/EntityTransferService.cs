@@ -210,7 +210,14 @@ public static class EntityTransferService
     public static void WriteIntoPartySlot(SaveFile sav, PKM pk, int index)
     {
         pk.ResetPartyStats();
-        sav.SetPartySlotAtIndex(pk, index);
+        // EntityImportSettings.None: the implicit default resolves to SaveFile.SetUpdatePKM
+        // (Enable), which conditions the entity "as if it was traded" into this save - silently
+        // mutating CurrentHandler/Handling Trainer name/gender/language on top of the import,
+        // never surfaced to the user. This page's whole stance is "applied exactly as written, not
+        // validated, not auto-fixed" (see the permanent warning banner); an undocumented handler
+        // rewrite on every import would quietly contradict that. Same fix as
+        // PokemonDetailPage.OnSaveChangesClicked, found via the same on-device investigation.
+        sav.SetPartySlotAtIndex(pk, index, EntityImportSettings.None);
     }
 
     // ---------------------------------------------------------------------------------------
