@@ -93,4 +93,10 @@ public partial class MainPage : ContentPage
 		NavigationState.PendingSave = loadedSave;
 		await Shell.Current.GoToAsync(nameof(TrainerInfoPage));
 	}
+
+	private async void OnViewPokedexClicked(object? sender, EventArgs e)
+	{
+		// Reference-only screen - no loaded save required, unlike the buttons above.
+		await Shell.Current.GoToAsync(nameof(PokedexListPage));
+	}
 }

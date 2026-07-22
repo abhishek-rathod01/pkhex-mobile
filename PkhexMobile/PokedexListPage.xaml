@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:PkhexMobile"
+             x:Class="PkhexMobile.PokedexListPage"
+             x:DataType="local:PokedexListPage"
+             Title="Pokedex">
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16" RowSpacing="12">
+
+        <Label Grid.Row="0" Text="Pokedex" Style="{StaticResource ScreenTitleStyle}" Margin="0,4,0,0" />
+
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12">
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Filter" Style="{StaticResource LabelCaptionStyle}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <SearchBar x:Name="SearchBox" Grid.Column="0" Placeholder="Search by name or #"
+                               TextChanged="OnFilterChanged" />
+                    <Picker x:Name="GenerationPicker" Grid.Column="1" Title="Gen" WidthRequest="110"
+                            SelectedIndexChanged="OnFilterChanged" />
+                </Grid>
+                <Label x:Name="ResultCountLabel" Style="{StaticResource MutedStyle}" />
+            </VerticalStackLayout>
+        </Border>
+
+        <CollectionView Grid.Row="2" x:Name="SpeciesGrid" SelectionMode="None">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="8" VerticalItemSpacing="8" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:PokedexEntryDisplay">
+                    <Border Style="{StaticResource RowBorderStyle}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSpeciesTapped" />
+                        </Border.GestureRecognizers>
+                        <VerticalStackLayout Spacing="2" HorizontalOptions="Center">
+                            <Image Source="{Binding SpriteFile}" Aspect="AspectFit"
+                                   WidthRequest="48" HeightRequest="48" HorizontalOptions="Center" />
+                            <Label Text="{Binding DexNumberText}" Style="{StaticResource MonoMutedStyle}"
+                                   FontSize="{StaticResource Text2xs}" HorizontalOptions="Center" />
+                            <Label Text="{Binding Name}" Style="{StaticResource BodySecondaryStyle}"
+                                   FontSize="{StaticResource TextXs}" HorizontalTextAlignment="Center"
+                                   LineBreakMode="TailTruncation" MaxLines="1" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+    </Grid>
+
+</ContentPage>
