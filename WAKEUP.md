@@ -1,5 +1,17 @@
 # WAKEUP — read this first
 
+## DECISIONS ONLY YOU CAN MAKE (flagged, not acted on)
+
+1. **Merge `3d-models-experimental` -> `master`?** It adds +214MB of Nintendo-derived `.glb`
+   model assets (933/974 species), already pushed to the public remote on its own branch. The
+   mechanism is verified working on-device. Left unmerged deliberately - size + third-party-asset
+   licensing on a public repo is a call only you should make, not a default I should take.
+2. **The "optimised vs full-scale model" toggle you asked for is not buildable as scoped.**
+   Checked the upstream asset source directly: it only publishes one (already-optimized) variant
+   per species - there is no separate full-scale/high-poly source to toggle to. If you want this,
+   it would mean sourcing full-scale models from a different pipeline entirely, not a toggle over
+   what's already fetched.
+
 ## LIVE TO-DO LIST (2026-07-23 overnight session, unattended - user asked this be kept explicit)
 
 User is asleep and unreachable for permission approvals for the remainder of this session.
@@ -42,6 +54,13 @@ pattern already used successfully for Track A this session).
   build - needs a JS console listener wired into `HybridWebView` (doesn't exist yet) to actually
   see the in-page error before attempting a fix. See `PROGRESS.md`'s "Texture investigation"
   section on the `3d-models-experimental` branch for the full evidence trail.
+- [x] **DONE**: Combined-field regression test (`verify/CombinedFieldSave`) - stacks Gender +
+  Pokerus + Markings + PP/PP-Ups + an IV change onto one mon in one save call across Gen1/2/3/5/9,
+  since every field above had only ever been verified in isolation. All pass; no cross-feature
+  regression found. Also re-confirmed `ci.yml` only wires up the 9 self-contained Gen1-9
+  harnesses - none of this session's 6 hardcoded-local-path harnesses (GenderPPEdit,
+  EncounterLocationData, CharacteristicDisplay, PokerusEdit, MarkingsEdit, CombinedFieldSave) can
+  break CI.
 - [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): origin/met data, egg status/hatch,
   bag/inventory editing, box wallpaper/current box. Priority order and API citations in
   `CAPABILITY-GAPS.md` Part 2.

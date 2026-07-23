@@ -2075,3 +2075,24 @@ referencing overloaded PKHeX.Core methods without disambiguating parameter types
 project's own bar is 0 warnings, and these had crept in past the pre-existing 7. Fixed by adding
 explicit parameter-type lists to the `<see cref>` tags; confirmed the build is back to exactly
 the same 7 pre-existing `CS8622` warnings as before this session.
+
+## Combined-field regression test (`verify/CombinedFieldSave`)
+
+Every field `PokemonDetailPage` added this session (Gender, PP/PP-Ups, Pokerus, Markings) had only
+been verified **in isolation** (`verify/GenderPPEdit`, `verify/PokerusEdit`, `verify/MarkingsEdit`),
+same for the pre-existing stack (`verify/FormNatureAbilityEdit`, `verify/BallFriendshipEdit`). All
+of them funnel through the same `OnSaveChangesClicked` -> `SetPartySlotAtIndex(EntityImportSettings
+.None)` -> `Write()` path, and this project has one documented precedent (the `CurrentHandler`
+"as if traded" bug) of a regression that only shows up when multiple writes land in the same save
+call - so isolated-per-field testing was a real gap, not just extra caution.
+
+Built a harness that stacks Gender + Pokerus Strain/Days + Markings (all slots) + PP/PP-Ups +
+an IV change (to force `ResetPartyStats`) onto **one mon in one save operation**, replicating the
+app's exact field-application order, across Gen1/2/3/5/9. Asserts: every field round-trips through
+`Write()`+reload, `Stat_ATK` actually moved off the new IV (proving `ResetPartyStats` engaged
+correctly alongside everything else, not stale), `CurrentHandler` is untouched (the
+`EntityImportSettings.None` guard still holds with every new field stacked in), `LegalityAnalysis`
+recomputes without throwing on a mon carrying every new field at once, and the original file on
+disk is byte-for-byte unchanged. All 5 generations pass. No cross-feature interaction bug found -
+this was a clean confirmation pass, not a bug hunt that turned something up. Hardcodes local save
+paths (like `BallFriendshipEdit` and friends) - excluded from CI.
