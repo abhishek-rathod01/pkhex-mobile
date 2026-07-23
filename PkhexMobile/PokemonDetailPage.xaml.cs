@@ -525,10 +525,10 @@ public partial class PokemonDetailPage : ContentPage
         // Hidden Power: Gen3+ only here - see verify/GenderPPEdit for why the Gen1/2 (GB-era) path
         // is deliberately excluded (its raw type-index encoding is a different, unverified mapping;
         // Gen1 doesn't have the Hidden Power move at all).
+        Span<int> ivs = stackalloc int[6];
+        p.GetIVs(ivs);
         if (p.Generation >= 3)
         {
-            Span<int> ivs = stackalloc int[6];
-            p.GetIVs(ivs);
             int typeIndex = 1 + HiddenPower.GetType(ivs, p.Context); // skip Normal - see ShowdownSet.cs
             HiddenPowerLabel.Text = $"Hidden Power: {GameInfo.Strings.Types[typeIndex]}";
             HiddenPowerLabel.IsVisible = true;
@@ -536,6 +536,30 @@ public partial class PokemonDetailPage : ContentPage
         else
         {
             HiddenPowerLabel.IsVisible = false;
+        }
+
+        // Characteristic: the "It takes plenty of siestas!"-style flavor line derived from
+        // whichever IV happens to be highest and the mon's own EncryptionConstant (real games use
+        // this exact mon-specific tiebreak so two same-IV mons don't always show the same stat).
+        // Gen3+ only - EncryptionConstant is a hard 0 on Gen1/2 (GBPKM.cs:124, sealed no-op
+        // setter), and Gen1/2 never had a Characteristic mechanic in the real games at all, so
+        // this is a structural gate, not a display preference (verified in verify/
+        // CharacteristicDisplay - Gen3-5 alias EncryptionConstant to PID, a real working value,
+        // not a no-op, so the calculation is meaningful there too despite EC not being
+        // independently stored pre-Gen6). GameInfo.Strings.characteristics is PKHeX.Core's own
+        // text table (GameStrings.cs "character" localization key) - not hand-written, unlike
+        // the Pokedex's Dex Entries flavor text which genuinely isn't in the library.
+        if (p.Generation >= 3)
+        {
+            int charIndex = EntityCharacteristic.GetCharacteristic(p.EncryptionConstant, ivs);
+            CharacteristicLabel.Text = charIndex >= 0 && charIndex < GameInfo.Strings.characteristics.Length
+                ? GameInfo.Strings.characteristics[charIndex]
+                : string.Empty;
+            CharacteristicLabel.IsVisible = !string.IsNullOrEmpty(CharacteristicLabel.Text);
+        }
+        else
+        {
+            CharacteristicLabel.IsVisible = false;
         }
     }
 

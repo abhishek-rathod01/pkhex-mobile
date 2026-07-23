@@ -267,6 +267,7 @@
                     </Grid>
 
                     <Label x:Name="HiddenPowerLabel" Style="{StaticResource MutedStyle}" Margin="0,6,0,0" />
+                    <Label x:Name="CharacteristicLabel" Style="{StaticResource MutedStyle}" IsVisible="False" />
                 </VerticalStackLayout>
             </Border>
 

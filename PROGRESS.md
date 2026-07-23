@@ -1978,3 +1978,26 @@ browsing has no real mon whose `IsShiny` to read), not a computed fact from a lo
   it matters most, modern SV/newer games) or estimated.
 - Per-form encounter/Mega data for alternate forms beyond the base species - `Form` is hardcoded
   to 0 for this whole page, same constraint the rest of the Pokedex detail screen already has.
+
+## Characteristic string, `PokemonDetailPage`'s Computed card (2026-07-23, `master`)
+
+Closes `CAPABILITY-GAPS.md` Tier B's "Characteristic string" item - the "It's alert to sounds!"-
+style flavor line real games show alongside a Pokemon's stats, one line added to the existing
+Computed card (below Hidden Power). Both pieces already exist in PKHeX.Core, nothing hand-built:
+`EntityCharacteristic.GetCharacteristic(ec, ivs)` computes the 0-29 index (the same real algorithm
+the games use - highest IV among the six, tie broken by `EncryptionConstant % 6` so two mons with
+identical IVs don't always show the same line), and `GameInfo.Strings.characteristics` is
+PKHeX.Core's own matching text table (`GameStrings.cs`'s `"character"` localization key) - unlike
+Dex Entries flavor text, which genuinely isn't in the library at all and had to come from PokeAPI.
+
+**Gen3+ only** - `EncryptionConstant` is a hard `0` on Gen1/2 (`GBPKM.cs:124`, sealed no-op
+setter), and Gen1/2 never had a Characteristic mechanic in the real games either, so this is a
+structural gate, not a display preference. Verified in `verify/CharacteristicDisplay` that Gen3-5
+(`G3PKM.cs:34` aliases `EncryptionConstant` to `PID`, a real working value) still produce a
+meaningful, per-mon-varying result despite EC not being independently stored until Gen6 - the gap
+list's original "Gen3+" scoping was correct, this isn't a Gen6+-only feature. The harness also
+cross-checked that the stat index the algorithm picked is actually tied-for-highest among that
+mon's own IVs, for all 5 tested generations (1/2/3/5/9) - not just that a string came back.
+
+Verified on-device against `gen9_real.sav`'s Dondozo: "It's alert to sounds!" rendered correctly
+under Hidden Power in the Computed card, no layout issues.
