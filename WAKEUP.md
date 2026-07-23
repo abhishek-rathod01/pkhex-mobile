@@ -18,20 +18,24 @@ pattern already used successfully for Track A this session).
   against Charizard (Megas) and Pikachu (largest encounter set, 161 wild rows alone) with no ANR
   and correct "+N more" capping. Encounter rate/% confirmed NOT available in PKHeX.Core at all -
   stated explicitly in the UI rather than network-fetched or estimated.
-- [ ] **Fetch real `.glb` 3D models** (Track C-2 from earlier in this session, deliberately deferred,
-  now explicitly requested) - dispatch as the ONE Haiku subagent slot once the flavor-text agent
-  finishes (not before - only one at a time). Source: `github.com/Pokemon-3D-api/assets`. Target:
-  `PkhexMobile/Resources/Raw/model3d/models/{speciesId}.glb` + a matching `model_{speciesId}.html`
-  wrapper per `Resources/Raw/model3d/README.md`'s documented convention, on the
-  `3d-models-experimental` branch (NOT master). Commit only, no push - orchestrator pushes after.
-- [ ] After 3D models land: on-device pass with at least one REAL model bundled (only the 2D
-  fallback and a public-domain test duck have been verified on-device so far, per `PROGRESS.md`'s
-  own "do not merge without this" note) - then decide whether to merge `3d-models-experimental`
-  into `master`.
-- [ ] Continue `CAPABILITY-GAPS.md` Tier B (all of Tier A is done): origin/met data, egg
-  status/hatch, bag/inventory editing, markings, Pokérus, characteristic string (tiny, pairs with
-  the Computed card already shipped), box wallpaper/current box. Priority order and API citations
-  in `CAPABILITY-GAPS.md` Part 2.
+- [x] **DONE**: Fetched real `.glb` 3D models (Track C-2) - 933/974 species, +213.9MB, on
+  `3d-models-experimental` (NOT master). Two dispatch attempts: the first correctly did nothing
+  because its worktree branched from `master` (which lacks this feature's files); redispatched
+  after switching the orchestrator's checkout to `3d-models-experimental` first. Independently
+  verified before merging (no code/doc files touched, all 933 file sizes spot-checked, a worktree
+  branch-name discrepancy resolved via hash-level `git cat-file`/`git merge-base` checks - the
+  commits were correct, the branch name the agent reported was not trustworthy at face value).
+  **On-device pass with a real model also done**: Charizard's model renders/rotates correctly
+  (untextured - a source-repo data-quality issue, not a pipeline bug); 2D fallback re-confirmed
+  for a missing species (#521). Full write-up in `PROGRESS.md`'s "Track C-2" section on that
+  branch. **Merge to master intentionally left undecided** - the ~214MB size tradeoff deserves a
+  deliberate call, not a default merge; flagged for the user's own review.
+- [x] **DONE**: Characteristic string (Computed card) and Pokerus Strain/Days editing (Main card),
+  both on `PokemonDetailPage`. Both verified library-level and on-device (`gen9_real.sav`). See
+  `PROGRESS.md`'s "Characteristic string" and "Pokerus editing" sections.
+- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): origin/met data, egg status/hatch,
+  bag/inventory editing, markings, box wallpaper/current box. Priority order and API citations in
+  `CAPABILITY-GAPS.md` Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery
   Gift, the single-generation interface cluster (Hyper Training/Tera type/size-scale/Dynamax/AVs/
   Memories/Super Training/tech records/HOME tracker/Alpha-Noble), QR import/export.
