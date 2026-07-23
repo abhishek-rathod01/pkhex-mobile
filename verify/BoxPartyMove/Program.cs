@@ -62,8 +62,114 @@ foreach (var (label, relPath) in cases)
     Console.WriteLine();
 }
 
+// --- Locked-slot guard (CAPABILITY-GAPS.md Part 2 #8): PokemonSlotMover.MoveOrSwap must refuse to
+// touch a box slot the game has reserved (battle team, etc.), matching BoxManagement's existing
+// bulk-op guard. None of this project's real save inventory happens to have a locked slot in its
+// as-downloaded state (confirmed by scanning all three), so this synthetically locks Team 0 via
+// SAV9SV's own public TeamIndexes.SetIsTeamLocked - a real, supported save-editing API, not a
+// hack - to genuinely exercise sav.IsBoxSlotOverwriteProtected returning true, rather than only
+// asserting the guard code exists. Fresh SaveFile instance, entirely separate from the Gen9 case
+// above, so this doesn't interact with its box-state mutations.
+{
+    Console.WriteLine("=== Gen9 (Scarlet, real save) - locked-slot guard ===");
+    var path = Path.Combine(root, @"pkmnscarlet_100\main");
+    var originalSnapshot = (byte[])File.ReadAllBytes(path).Clone();
+    var sav = SaveUtil.GetSaveFile((byte[])originalSnapshot.Clone()) as SAV9SV;
+    if (sav is null)
+    {
+        Console.WriteLine("  FAIL: could not load as SAV9SV.");
+        allPass = false;
+    }
+    else
+    {
+        // Team 0's six TeamSlots entries default to NONE_SELECTED (-1) on a save with no battle
+        // team configured (confirmed empirically - locking Team 0 alone with no slots assigned
+        // produced zero locked box slots on the first run of this test). GetBoxSlotFlags only
+        // resolves a linear box index to a team via TeamSlots.IndexOf(index), so a real team needs
+        // real slot pointers, not just the lock flag. Point Team 0's first slot at box 0 slot 0 -
+        // a real, valid linear index - to genuinely exercise the guard.
+        sav.TeamIndexes.TeamSlots[0] = sav.BoxSlotCount * 0 + 0;
+        sav.TeamIndexes.SetIsTeamLocked(0, true);
+
+        int lockedBox = -1, lockedSlot = -1;
+        for (int b = 0; b < sav.BoxCount && lockedBox < 0; b++)
+        {
+            for (int s = 0; s < sav.BoxSlotCount; s++)
+            {
+                if (sav.IsBoxSlotOverwriteProtected(b, s)) { lockedBox = b; lockedSlot = s; break; }
+            }
+        }
+
+        if (lockedBox < 0)
+        {
+            Console.WriteLine("  FAIL: locking Team 0 did not produce any locked box slot - can't exercise the guard.");
+            allPass = false;
+        }
+        else
+        {
+            Console.WriteLine($"  Team 0 locked -> box {lockedBox} slot {lockedSlot} now reports IsBoxSlotOverwriteProtected=true.");
+            var (sourceBox, sourceSlot) = FindOccupiedSlotOtherThan(sav, lockedBox, lockedSlot);
+
+            if (sourceBox < 0)
+            {
+                Console.WriteLine("  FAIL: no other occupied box slot found to use as a move source.");
+                allPass = false;
+            }
+            else
+            {
+                var beforeSnapshot = sav.GetPCBinary();
+                bool threw = false;
+                try
+                {
+                    PokemonSlotMover.MoveOrSwap(sav, SlotLocation.InBox(sourceBox, sourceSlot), SlotLocation.InBox(lockedBox, lockedSlot));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    threw = true;
+                    Console.WriteLine($"  OK: move into the locked slot threw InvalidOperationException: {ex.Message}");
+                }
+
+                if (!threw)
+                {
+                    Console.WriteLine("  FAIL: move into the locked slot did NOT throw - guard is not working.");
+                    allPass = false;
+                }
+
+                var afterSnapshot = sav.GetPCBinary();
+                if (beforeSnapshot.AsSpan().SequenceEqual(afterSnapshot))
+                    Console.WriteLine("  OK: box contents completely unchanged after the rejected move (validated before any write, as designed).");
+                else
+                {
+                    Console.WriteLine("  FAIL: box contents changed even though the move was rejected!");
+                    allPass = false;
+                }
+            }
+        }
+    }
+
+    var stillOriginal = File.ReadAllBytes(path).AsSpan().SequenceEqual(originalSnapshot);
+    Console.WriteLine(stillOriginal
+        ? "  Original file on disk: untouched (confirmed)."
+        : "  WARNING: original file on disk changed unexpectedly!");
+}
+
 Console.WriteLine(allPass ? "=== ALL CASES PASS ===" : "=== ONE OR MORE CASES FAILED ===");
 return allPass ? 0 : 1;
+
+static (int Box, int Slot) FindOccupiedSlotOtherThan(SaveFile sav, int exceptBox, int exceptSlot)
+{
+    for (int b = 0; b < sav.BoxCount; b++)
+    {
+        for (int s = 0; s < sav.BoxSlotCount; s++)
+        {
+            if (b == exceptBox && s == exceptSlot)
+                continue;
+            if (sav.GetBoxSlotAtIndex(b, s).Species != 0)
+                return (b, s);
+        }
+    }
+    return (-1, -1);
+}
 
 bool RunCase(SaveFile sav, string label)
 {

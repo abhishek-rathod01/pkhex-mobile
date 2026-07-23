@@ -50,7 +50,7 @@
                     <RoundRectangle CornerRadius="12" />
                 </Border.StrokeShape>
                 <Label x:Name="LegalityWarningLabel"
-                       Text="⚠ Species, form, ability, nature, and move edits are applied exactly as chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged as illegal by other tools. This is expected."
+                       Text="⚠ Species, form, ability, nature, gender, and move edits are applied exactly as chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged as illegal by other tools. This is expected."
                        Style="{StaticResource WarningBannerStyle}"
                        LineBreakMode="WordWrap" />
             </Border>
@@ -112,6 +112,17 @@
                          quirk (see PROGRESS.md), not a no-op, so no extra gating is needed for them. -->
                     <Label x:Name="FriendshipCaptionLabel" Text="Friendship" Style="{StaticResource LabelCaptionStyle}" />
                     <Entry x:Name="FriendshipEntry" Keyboard="Numeric" />
+
+                    <!-- Gender: editable Gen4+ via pk.Gender (real independent storage - PK4.cs
+                         Data[0x40]). Gen1/2 derive it from IV_ATK vs. the species' gender-ratio
+                         threshold (GBPKM.cs:106-119, setter is a hard no-op); Gen3 derives it from
+                         PID vs. the same threshold (G3PKM.cs:37, also a hard no-op) - both disabled
+                         here with the reason inline, same precedent as Ball/Friendship/Ability/
+                         Nature above. Unconstrained by the species' actual gender ratio (matches
+                         this app's stance on Nature/Ability/Form: applied exactly as chosen, the
+                         read-only legality badge is what reports a mismatch, not a picker guard). -->
+                    <Label x:Name="GenderCaptionLabel" Text="Gender" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="GenderPicker" Title="Select gender" />
                 </VerticalStackLayout>
             </Border>
 
@@ -138,6 +149,16 @@
                                 <Label x:Name="Move1LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
                             </Border>
                         </Grid>
+                        <!-- PP / PP Ups: pk.MoveN_PP / pk.MoveN_PPUps, uniform abstract members with no
+                             per-generation split (unlike the rest of this page's editable fields). The
+                             app previously only ever called SetMoves (which auto-maxes PP on a move
+                             change); this exposes manual control over both independently. -->
+                        <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6" Margin="50,0,0,0">
+                            <Label Grid.Column="0" Text="PP" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="1" x:Name="Move1PpEntry" Keyboard="Numeric" WidthRequest="52" />
+                            <Label Grid.Column="3" Text="PP Ups" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="4" x:Name="Move1PpUpsEntry" Keyboard="Numeric" WidthRequest="52" />
+                        </Grid>
                         <Label x:Name="Move1LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="4">
@@ -149,6 +170,12 @@
                             <Border Grid.Column="2" x:Name="Move2LegalityDot" Style="{StaticResource MoveLegalityDotPassStyle}">
                                 <Label x:Name="Move2LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
                             </Border>
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6" Margin="50,0,0,0">
+                            <Label Grid.Column="0" Text="PP" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="1" x:Name="Move2PpEntry" Keyboard="Numeric" WidthRequest="52" />
+                            <Label Grid.Column="3" Text="PP Ups" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="4" x:Name="Move2PpUpsEntry" Keyboard="Numeric" WidthRequest="52" />
                         </Grid>
                         <Label x:Name="Move2LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
                     </VerticalStackLayout>
@@ -162,6 +189,12 @@
                                 <Label x:Name="Move3LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
                             </Border>
                         </Grid>
+                        <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6" Margin="50,0,0,0">
+                            <Label Grid.Column="0" Text="PP" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="1" x:Name="Move3PpEntry" Keyboard="Numeric" WidthRequest="52" />
+                            <Label Grid.Column="3" Text="PP Ups" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="4" x:Name="Move3PpUpsEntry" Keyboard="Numeric" WidthRequest="52" />
+                        </Grid>
                         <Label x:Name="Move3LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="4">
@@ -174,8 +207,66 @@
                                 <Label x:Name="Move4LegalityGlyph" Style="{StaticResource MoveLegalityDotLabelPassStyle}" />
                             </Border>
                         </Grid>
+                        <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6" Margin="50,0,0,0">
+                            <Label Grid.Column="0" Text="PP" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="1" x:Name="Move4PpEntry" Keyboard="Numeric" WidthRequest="52" />
+                            <Label Grid.Column="3" Text="PP Ups" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                            <Entry Grid.Column="4" x:Name="Move4PpUpsEntry" Keyboard="Numeric" WidthRequest="52" />
+                        </Grid>
                         <Label x:Name="Move4LegalityCaption" Style="{StaticResource MoveLegalityCaptionStyle}" IsVisible="False" />
                     </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Computed (read-only): battle stats calculated fresh from the currently-stored
+                 IV/EV/level/nature/species (PKM.GetStats - does not require or mutate the party
+                 stat block, so it works the same for a party mon and a box mon), current-games
+                 type(s) from PersonalTable.SV (same source/tradeoff as the Pokedex feature - shows
+                 today's type, e.g. Fairy for Clefairy, not necessarily this mon's origin-generation
+                 type), and Hidden Power type (IV-derived, Gen3+ only - see PokemonDetailPage.cs). -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Computed" Style="{StaticResource SectionTitleStyle}" />
+
+                    <Label Text="Type" Style="{StaticResource LabelCaptionStyle}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Border x:Name="ComputedType1Chip" Style="{StaticResource TypeChipBorderStyle}">
+                            <Label x:Name="ComputedType1Label" Style="{StaticResource TypeChipLabelStyle}" />
+                        </Border>
+                        <Border x:Name="ComputedType2Chip" Style="{StaticResource TypeChipBorderStyle}" IsVisible="False">
+                            <Label x:Name="ComputedType2Label" Style="{StaticResource TypeChipLabelStyle}" />
+                        </Border>
+                    </HorizontalStackLayout>
+
+                    <Label Text="Battle Stats" Style="{StaticResource LabelCaptionStyle}" Margin="0,6,0,0" />
+                    <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="4">
+                        <VerticalStackLayout Grid.Column="0" Spacing="0">
+                            <Label Text="HP" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedHpLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="0">
+                            <Label Text="Atk" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedAtkLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2" Spacing="0">
+                            <Label Text="Def" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedDefLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="3" Spacing="0">
+                            <Label Text="SpA" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedSpaLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="4" Spacing="0">
+                            <Label Text="SpD" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedSpdLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="5" Spacing="0">
+                            <Label Text="Spe" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="ComputedSpeLabel" Style="{StaticResource RowTitleStyle}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Label x:Name="HiddenPowerLabel" Style="{StaticResource MutedStyle}" Margin="0,6,0,0" />
                 </VerticalStackLayout>
             </Border>
 

@@ -54,6 +54,13 @@ public readonly record struct SlotLocation
 ///   already set by <see cref="SaveFile.DeletePartySlot"/>'s own internal shifting calls -
 ///   a same-save relocation should not re-trigger "as if traded" handler conditioning,
 ///   Pokedex updates, or record-acquired bookkeeping (the mon isn't newly caught or traded).
+/// - Any box slot involved (source or destination) is checked against
+///   <see cref="SaveFile.IsBoxSlotOverwriteProtected"/> before any write happens - a locked slot
+///   (battle-team, GO transporter, or similar per-game reservation) throws instead of being
+///   silently overwritten or vacated. <see cref="BoxManagement"/>'s bulk sort/clear operations
+///   already guard the equivalent case with <see cref="SaveFile.IsAnySlotLockedInBox"/>; this
+///   per-slot path had no equivalent guard until now (see CAPABILITY-GAPS.md §1.2/Part 2 #8).
+///   Party has no lock concept in this API, so only box endpoints are checked.
 /// </summary>
 public static class PokemonSlotMover
 {
@@ -84,6 +91,8 @@ public static class PokemonSlotMover
 
         ValidateLocation(sav, from);
         ValidateLocation(sav, to);
+        EnsureNotLocked(sav, from);
+        EnsureNotLocked(sav, to);
 
         if (destEmpty)
         {
@@ -138,6 +147,20 @@ public static class PokemonSlotMover
             sav.SetPartySlotAtIndex(pk, loc.Slot, EntityImportSettings.None);
         else
             sav.SetBoxSlotAtIndex(pk, loc.Box, loc.Slot, EntityImportSettings.None);
+    }
+
+    /// <summary>
+    /// Throws if <paramref name="loc"/> is a box slot the game has reserved (battle team, GO
+    /// transporter, etc.) - see <see cref="SaveFile.IsBoxSlotOverwriteProtected"/>. Party slots have
+    /// no equivalent concept in this API and are never checked.
+    /// </summary>
+    private static void EnsureNotLocked(SaveFile sav, SlotLocation loc)
+    {
+        if (!loc.IsParty && sav.IsBoxSlotOverwriteProtected(loc.Box, loc.Slot))
+        {
+            throw new InvalidOperationException(
+                $"Box {loc.Box + 1} slot {loc.Slot + 1} is locked by the game (battle team or similar) and can't be moved.");
+        }
     }
 
     private static void ValidateLocation(SaveFile sav, SlotLocation loc)

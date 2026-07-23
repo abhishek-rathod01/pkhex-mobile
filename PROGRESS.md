@@ -1772,3 +1772,96 @@ fallback.
 - Not merged to `master`.
 - Alternate forms (Mega/regional/Gmax) all resolve to the base species' model
   slot - no separate per-form model lookup yet.
+
+## Gender editing, manual PP/PP-Ups editing, and a read-only "Computed" card (2026-07-23, `master`)
+
+Closes four of `CAPABILITY-GAPS.md`'s Tier A items (#3, #4, #5, #6/#7 combined)
+plus the Tier A hardening item (#8). All on `PokemonDetailPage`.
+
+- **Gender editing.** `pk.Gender` (Male/Female/Genderless picker). **SPLIT**,
+  identical shape to Ball/Friendship: Gen1/2 derive it from `IV_ATK` vs. the
+  species' gender-ratio threshold (`GBPKM.cs:106-119`, hard no-op setter);
+  Gen3 derives it from PID vs. the same threshold (`G3PKM.cs:37`, also a hard
+  no-op); Gen4+ is real independent storage (`PK4.cs:170`, `Data[0x40]`).
+  Disabled-but-show-the-truth on Gen1-3, same as every other SPLIT field on
+  this page. Unconstrained by the species' actual gender ratio - applied
+  exactly as chosen, matching this app's Nature/Ability/Form stance; a
+  mismatch is the read-only legality badge's job to report, not a picker
+  guard's job to prevent.
+- **Manual PP / PP-Ups editing.** `pk.MoveN_PP`/`MoveN_PPUps`, uniform across
+  every generation (no SPLIT needed - `PKM.cs:133-140` are plain abstract
+  members with no per-format no-op anywhere). Previously the app only ever
+  called `SetMoves`, which auto-maxes PP; this exposes direct control. A
+  small PP/PP-Ups row was added under each of the 4 move pickers. Selecting a
+  *different* move in a slot auto-resets that slot's PP to the new move's max
+  and PP-Ups to 0 (mirrors real in-game "learn a new move" behavior) - the
+  user can still override immediately after. Live-clamped to 0-255 (PP) and
+  0-3 (PP-Ups) - 0-255 because every generation stores PP as a single byte
+  (e.g. `PK9.cs:340` `Data[0x7A] = (byte)value`), so that's a real structural
+  ceiling, not an arbitrary UI choice; 0-3 because PP Up's real max stack
+  effect is 3 in every generation. Deliberately **not** clamped to the
+  selected move's own max-at-current-PP-Ups: unlike IV/EV, PP has no
+  legality-reporting mechanism in this app to fall back on, and an unusually
+  high PP is harmless (nothing derives from it), so it's treated like the
+  EV-over-budget case - allowed, not blocked.
+- **Read-only "Computed" card**, three gap-list items folded into one card
+  since they share one read cadence (load + after save, never per-keystroke):
+  - **Battle stats** via `PKM.GetStats(PersonalInfo)` - computes fresh from
+    the PKM's own *current* IV/EV/level/nature fields. Deliberately not
+    `pk.Stat_HPMax` etc. (the stored party stat block): that's last-saved
+    state and would lag every unsaved edit, and per CLAUDE.md's own trap
+    table, a box mon's stored block can be stale/zeroed anyway. `GetStats`
+    sidesteps both problems - same call for a party mon and a box mon.
+  - **Species type chip(s)** from `PersonalTable.SV`, keyed by species/form -
+    reuses the exact technique the already-shipped Pokedex feature uses, and
+    for a real reason found while building this: `pk.PersonalInfo.Type1`/
+    `Type2` is a **per-save-format raw byte**, not safe to use directly.
+    `PersonalInfo1.Type1` (Gen1) is `Data[0x06]`, the game's own internal
+    type-ID table, which has unused gaps (an "unused Bird type" slot) and
+    does **not** match PKHeX's modern 0-17 `MoveType` order - confirmed by a
+    real `ArgumentOutOfRangeException` crash in `verify/GenderPPEdit` on the
+    first run, indexing `GameInfo.Strings.Types[t1]` with a raw Gen1 byte.
+    Fixed by routing through `PersonalTable.SV` instead, same source/tradeoff
+    the Pokedex feature already made (shows the *current-games* type, e.g.
+    Fairy for Clefairy, not necessarily the mon's origin-generation type).
+  - **Hidden Power type**, `HiddenPower.GetType(IVs, context)`, **Gen3+ only**.
+    The raw 0-15 return value needs `+1` to map onto the standard type-byte
+    order (it skips Normal, which Hidden Power can never be) - confirmed via
+    `ShowdownSet.cs:775`'s own `1 + HiddenPowerType // skip Normal` comment,
+    the only place in the vendored library that actually uses this
+    conversion. Gen1/2's GB-era path (`HiddenPower.GetTypeGB`) is a
+    *different* raw encoding that this same `+1` offset is never verified
+    against anywhere in the library (`ShowdownSet` never exercises it, since
+    the Showdown format doesn't cover Gen1/2) - rather than assert something
+    unverified, Hidden Power is simply not shown before Gen3. Gen1 doesn't
+    have the Hidden Power move at all regardless (introduced Gen2).
+- **Locked-slot guard in `PokemonSlotMover.MoveOrSwap`** (`CAPABILITY-GAPS.md`
+  §1.2 / Part 2 #8, a hardening item, not a feature). Any box endpoint
+  (source or destination) is checked against `SaveFile.IsBoxSlotOverwriteProtected`
+  before any write happens, throwing `InvalidOperationException` instead of
+  silently overwriting or vacating a game-reserved slot (battle team, GO
+  transporter, etc.) - `BoxManagement`'s bulk sort/clear ops already guarded
+  the equivalent bulk case; this per-slot path had none until now. `BoxListPage
+  .PerformMove` already wraps every `MoveOrSwap` call in a generic
+  `catch (Exception ex)` that reports `ex.Message` and continues, so this
+  needed no UI changes to surface cleanly.
+
+**Verification:** `verify/GenderPPEdit` (new) - Gender editable/no-op split
+and PP/PP-Ups round-trip against 5 real saves (Gen1/2/3/5/9), plus a
+plausibility check on the three Computed-card values per generation (this is
+where the Type1 crash above was actually caught, before it ever reached the
+app). `verify/BoxPartyMove` gained a locked-slot case: none of this project's
+real save inventory happens to have an actually-locked box slot in its
+as-downloaded state (confirmed by scanning all three), so the test
+synthetically locks Team 0 via `SAV9SV`'s own public `TeamIndexes` API (a
+real, supported save-editing surface, not a hack - `TeamSlots[0]` must first
+be pointed at a real linear box index, since `GetBoxSlotFlags` resolves a
+team via `TeamSlots.IndexOf(index)` and a lock flag alone with no team slots
+assigned resolves to nothing, confirmed empirically on the first attempt)
+to genuinely exercise `IsBoxSlotOverwriteProtected` returning true, rather
+than only asserting the guard code exists. On-device (`gen9_real.sav`,
+Skeledirge): Gender changed Male->Female, Move1 PP changed 16->10, both
+round-tripped through the real `FileSaver` write path and were confirmed in
+the exported file; Computed card showed Fire/Ghost typing, battle stats
+(367/196/247/281/201/212), and "Hidden Power: Dark", with no layout issues
+scrolling through the new UI.

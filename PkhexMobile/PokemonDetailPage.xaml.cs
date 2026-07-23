@@ -34,6 +34,10 @@ public partial class PokemonDetailPage : ContentPage
     // Gen2 on; Gen1 is a hard no-op (PK1.cs:155). Same treatment as the four above.
     bool ballEditable;
     bool friendshipEditable;
+    // Gender is real/independently-stored from Gen4 on (PK4.cs:170, Data[0x40]). Gen1/2 derive it
+    // from IV_ATK vs. the gender-ratio threshold (GBPKM.cs:106-119) and Gen3 from PID vs. the same
+    // threshold (G3PKM.cs:37) - both hard no-op setters, same treatment as the four fields above.
+    bool genderEditable;
 
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
@@ -107,19 +111,46 @@ public partial class PokemonDetailPage : ContentPage
         ItemPicker.SelectedIndexChanged += (_, _) => OnHeldItemSelectionChanged();
         BallPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         FriendshipEntry.TextChanged += (_, _) => { ClampEntryToMax(FriendshipEntry, 255); MarkDirty(); };
+        GenderPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        // PP is stored as a single byte in every generation (e.g. PK9.cs:340 `Data[0x7A] = (byte)value`),
+        // so 0-255 is the real hard ceiling everywhere - clamped live like the IV/EV fields, same
+        // defensive-backstop precedent. PP Ups' real ceiling is 3 (the "PP Up" item's max stack
+        // effect in every generation). Deliberately NOT clamped to the selected move's own max PP at
+        // *this* max PP-Ups - unlike the IV/EV/species fields, PP has no legality-reporting mechanism
+        // in this app to fall back on, and an unusually-high-for-the-move PP value is harmless (no
+        // derived stat depends on it), so it's treated like the EV-over-budget case: allowed, not
+        // blocked.
+        Move1PpEntry.TextChanged += (_, _) => { ClampEntryToMax(Move1PpEntry, 255); MarkDirty(); };
+        Move2PpEntry.TextChanged += (_, _) => { ClampEntryToMax(Move2PpEntry, 255); MarkDirty(); };
+        Move3PpEntry.TextChanged += (_, _) => { ClampEntryToMax(Move3PpEntry, 255); MarkDirty(); };
+        Move4PpEntry.TextChanged += (_, _) => { ClampEntryToMax(Move4PpEntry, 255); MarkDirty(); };
+        Move1PpUpsEntry.TextChanged += (_, _) => { ClampEntryToMax(Move1PpUpsEntry, 3); MarkDirty(); };
+        Move2PpUpsEntry.TextChanged += (_, _) => { ClampEntryToMax(Move2PpUpsEntry, 3); MarkDirty(); };
+        Move3PpUpsEntry.TextChanged += (_, _) => { ClampEntryToMax(Move3PpUpsEntry, 3); MarkDirty(); };
+        Move4PpUpsEntry.TextChanged += (_, _) => { ClampEntryToMax(Move4PpUpsEntry, 3); MarkDirty(); };
         // One handler per move Picker, not two - the type chip has to refresh on every selection
         // change (including the programmatic ones LoadPokemon fires), while MarkDirty must stay
         // suppressed during load. Those are different concerns on the same event, so they're
         // combined in OnMoveSelectionChanged rather than stacked as a second subscription.
-        Move1Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move1Picker, Move1TypeChip, Move1TypeLabel);
-        Move2Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move2Picker, Move2TypeChip, Move2TypeLabel);
-        Move3Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move3Picker, Move3TypeChip, Move3TypeLabel);
-        Move4Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move4Picker, Move4TypeChip, Move4TypeLabel);
+        Move1Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move1Picker, Move1TypeChip, Move1TypeLabel, Move1PpEntry, Move1PpUpsEntry);
+        Move2Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move2Picker, Move2TypeChip, Move2TypeLabel, Move2PpEntry, Move2PpUpsEntry);
+        Move3Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move3Picker, Move3TypeChip, Move3TypeLabel, Move3PpEntry, Move3PpUpsEntry);
+        Move4Picker.SelectedIndexChanged += (_, _) => OnMoveSelectionChanged(Move4Picker, Move4TypeChip, Move4TypeLabel, Move4PpEntry, Move4PpUpsEntry);
     }
 
-    private void OnMoveSelectionChanged(Picker picker, Border chip, Label label)
+    private void OnMoveSelectionChanged(Picker picker, Border chip, Label label, Entry ppEntry, Entry ppUpsEntry)
     {
         RefreshMoveTypeChip(picker, chip, label);
+        // A newly-selected move gets full PP at 0 PP Ups, matching real-game "learn a new move"
+        // behavior (SetMoves does the same auto-max at save time) - the load path calls
+        // PopulatePpFields immediately afterward, which overwrites this with the mon's real stored
+        // values, so this only has a visible effect on a genuine interactive move change.
+        if (pk is not null)
+        {
+            ushort move = MoveIdFor(picker);
+            ppUpsEntry.Text = "0";
+            ppEntry.Text = (move == 0 ? 0 : pk.GetMovePP(move, 0)).ToString();
+        }
         // MarkDirty gates itself on isLoading, so the chip above still refreshes during load while
         // the Save button correctly stays clean.
         MarkDirty();
@@ -284,6 +315,9 @@ public partial class PokemonDetailPage : ContentPage
         PopulateHeldItem(p);
         PopulateBallPicker(p);
         PopulateFriendship(p);
+        PopulateGenderPicker(p);
+        PopulatePpFields(p);
+        RefreshComputed(p);
         RefreshLegality(p);
 
         SaveStatusLabel.Text = string.Empty;
@@ -418,6 +452,99 @@ public partial class PokemonDetailPage : ContentPage
         FriendshipCaptionLabel.Text = friendshipEditable
             ? "Friendship (0-255)"
             : "Friendship (not stored in Gen 1 - see PROGRESS.md)";
+    }
+
+    // Gender: real, independently-stored, working setter starting Gen4 (PK4.cs:170, Data[0x40]).
+    // Gen1/2 derive it from IV_ATK vs. the species' gender-ratio threshold (GBPKM.cs:106-119);
+    // Gen3 derives it from PID vs. the same threshold (G3PKM.cs:37) - both hard no-op setters, same
+    // disable-but-show-the-truth treatment as Ball/Friendship/Ability/Nature above. Unlike those
+    // fields there is no format-specific ID list to build - Male/Female/Genderless is the complete,
+    // fixed set in every generation (pk.Gender is a byte 0/1/2 uniformly).
+    private void PopulateGenderPicker(PKM p)
+    {
+        GenderPicker.ItemsSource = new List<string> { "Male", "Female", "Genderless" };
+
+        genderEditable = p.Generation >= 4;
+        GenderPicker.IsEnabled = genderEditable;
+        GenderCaptionLabel.Text = genderEditable
+            ? "Gender"
+            : "Gender (derived from IVs/PID before Gen 4, not directly editable - see PROGRESS.md)";
+        GenderPicker.Title = "Select gender";
+        GenderPicker.SelectedIndex = p.Gender switch { 0 => 0, 1 => 1, _ => 2 };
+    }
+
+    // PP / PP Ups: pk.MoveN_PP / pk.MoveN_PPUps, uniform abstract members with no per-generation
+    // split (PKM.cs:133-140). The app previously only ever called SetMoves (auto-maxes PP on a
+    // move change, still does at save time here too) - this displays and allows overriding the
+    // actual stored current PP and PP Up count independently.
+    private void PopulatePpFields(PKM p)
+    {
+        Move1PpEntry.Text = p.Move1_PP.ToString();
+        Move1PpUpsEntry.Text = p.Move1_PPUps.ToString();
+        Move2PpEntry.Text = p.Move2_PP.ToString();
+        Move2PpUpsEntry.Text = p.Move2_PPUps.ToString();
+        Move3PpEntry.Text = p.Move3_PP.ToString();
+        Move3PpUpsEntry.Text = p.Move3_PPUps.ToString();
+        Move4PpEntry.Text = p.Move4_PP.ToString();
+        Move4PpUpsEntry.Text = p.Move4_PPUps.ToString();
+    }
+
+    // Read-only "Computed" card: battle stats freshly calculated from the PKM's own current
+    // IV/EV/level/nature/species via PKM.GetStats(PersonalInfo) - this does NOT read or require the
+    // stored party stat block (Stat_HPMax etc.), so it is correct for both a party mon and a box mon
+    // without needing CLAUDE.md's "box slots can carry a stale/zeroed party stat block" workaround
+    // that ResetPartyStats-on-write already handles elsewhere on this page. Type chip(s) are sourced
+    // from PersonalTable.SV (the same current-games source PokedexService uses), not the per-save-
+    // format pk.PersonalInfo.Type1/Type2 - that raw byte is Gen1-format-specific internal encoding
+    // (PersonalInfo1.Type1 = Data[0x06], includes an unused "Bird" type slot) and is NOT safe to
+    // index into GameInfo.Strings.Types directly; confirmed by a real ArgumentOutOfRangeException
+    // crash in verify/GenderPPEdit before this was fixed to go through PersonalTable.SV instead. This
+    // deliberately shows the CURRENT-games type (e.g. Fairy for Clefairy) rather than this mon's
+    // origin-generation type - same tradeoff the Pokedex feature already made.
+    private void RefreshComputed(PKM p)
+    {
+        var stats = p.GetStats(p.PersonalInfo);
+        ComputedHpLabel.Text = stats[0].ToString();
+        ComputedAtkLabel.Text = stats[1].ToString();
+        ComputedDefLabel.Text = stats[2].ToString();
+        ComputedSpeLabel.Text = stats[3].ToString();
+        ComputedSpaLabel.Text = stats[4].ToString();
+        ComputedSpdLabel.Text = stats[5].ToString();
+
+        var resources = Application.Current?.Resources;
+        if (resources is not null)
+        {
+            var pi = PersonalTable.SV.GetFormEntry(p.Species, p.Form);
+            SetComputedTypeChip(ComputedType1Chip, ComputedType1Label, pi.Type1, resources);
+            bool hasSecond = pi.Type2 != pi.Type1;
+            ComputedType2Chip.IsVisible = hasSecond;
+            if (hasSecond)
+                SetComputedTypeChip(ComputedType2Chip, ComputedType2Label, pi.Type2, resources);
+        }
+
+        // Hidden Power: Gen3+ only here - see verify/GenderPPEdit for why the Gen1/2 (GB-era) path
+        // is deliberately excluded (its raw type-index encoding is a different, unverified mapping;
+        // Gen1 doesn't have the Hidden Power move at all).
+        if (p.Generation >= 3)
+        {
+            Span<int> ivs = stackalloc int[6];
+            p.GetIVs(ivs);
+            int typeIndex = 1 + HiddenPower.GetType(ivs, p.Context); // skip Normal - see ShowdownSet.cs
+            HiddenPowerLabel.Text = $"Hidden Power: {GameInfo.Strings.Types[typeIndex]}";
+            HiddenPowerLabel.IsVisible = true;
+        }
+        else
+        {
+            HiddenPowerLabel.IsVisible = false;
+        }
+    }
+
+    private static void SetComputedTypeChip(Border chip, Label label, byte typeId, ResourceDictionary resources)
+    {
+        string key = typeId < TypeColorKeys.Length ? TypeColorKeys[typeId] : "Normal";
+        chip.BackgroundColor = (Color)resources[$"Type{key}"];
+        label.TextColor = Colors.White;
+        label.Text = GameInfo.Strings.Types[typeId].ToUpperInvariant();
     }
 
     // Read-only legality snapshot (PKHeX.Core's own LegalityAnalysis, no changes made to it and no
@@ -898,11 +1025,36 @@ public partial class PokemonDetailPage : ContentPage
             newFriendship = friendship;
         }
 
+        byte newGender = pk.Gender;
+        if (genderEditable)
+        {
+            if (GenderPicker.SelectedIndex < 0)
+            {
+                SaveStatusLabel.Text = "Select a gender before saving.";
+                return;
+            }
+            newGender = (byte)GenderPicker.SelectedIndex;
+        }
+
+        // PP/PP-Ups are uniform across every generation (no editable-gate needed, unlike the fields
+        // above) - resolved and validated the same way regardless of format.
+        if (!TryParseStat(Move1PpEntry.Text, 255, out var move1Pp) || !TryParseStat(Move1PpUpsEntry.Text, 3, out var move1PpUps) ||
+            !TryParseStat(Move2PpEntry.Text, 255, out var move2Pp) || !TryParseStat(Move2PpUpsEntry.Text, 3, out var move2PpUps) ||
+            !TryParseStat(Move3PpEntry.Text, 255, out var move3Pp) || !TryParseStat(Move3PpUpsEntry.Text, 3, out var move3PpUps) ||
+            !TryParseStat(Move4PpEntry.Text, 255, out var move4Pp) || !TryParseStat(Move4PpUpsEntry.Text, 3, out var move4PpUps))
+        {
+            // Defensive clamp backstop: the live TextChanged handlers above already prevent typing
+            // past these ranges - re-validate here too rather than trusting the UI state alone.
+            SaveStatusLabel.Text = "PP must be 0-255 and PP Ups must be 0-3.";
+            return;
+        }
+
         bool heldItemChanged = heldItemEditable && newHeldItem != pk.HeldItem;
         bool speciesChanged = newSpecies != pk.Species;
         bool formChanged = formEditable && newForm != pk.Form;
         bool abilityChanged = abilityEditable && newAbility != pk.Ability;
         bool natureChanged = natureEditable && newNature != pk.Nature;
+        bool genderChanged = genderEditable && newGender != pk.Gender;
         bool movesChanged = newMoves[0] != pk.Move1 || newMoves[1] != pk.Move2 ||
                             newMoves[2] != pk.Move3 || newMoves[3] != pk.Move4;
 
@@ -971,6 +1123,18 @@ public partial class PokemonDetailPage : ContentPage
                 pk.Ball = (byte)newBall;
             if (friendshipEditable)
                 pk.CurrentFriendship = (byte)newFriendship;
+            // Gender does not feed the stat block either (battle mechanics only) - same
+            // statsAffected exclusion as Ability/Ball/Friendship above.
+            if (genderEditable)
+                pk.Gender = newGender;
+
+            // PP/PP-Ups applied AFTER SetMoves (which already ran above and auto-maxed PP for the
+            // new move IDs) so these explicit values are what actually stick, not the auto-max.
+            // Uniform across every generation, no editable-gate needed.
+            pk.Move1_PP = move1Pp; pk.Move1_PPUps = move1PpUps;
+            pk.Move2_PP = move2Pp; pk.Move2_PPUps = move2PpUps;
+            pk.Move3_PP = move3Pp; pk.Move3_PPUps = move3PpUps;
+            pk.Move4_PP = move4Pp; pk.Move4_PPUps = move4PpUps;
 
             pk.IV_HP = ivHp;
             pk.IV_ATK = ivAtk;
@@ -1019,12 +1183,14 @@ public partial class PokemonDetailPage : ContentPage
                 // Reinforce the caveat at the moment it matters: only when the user actually
                 // changed species/form/ability/nature/moves, so a plain nickname/stat edit isn't
                 // nagged.
-                var note = (speciesChanged || formChanged || abilityChanged || natureChanged || movesChanged)
-                    ? " (Species/form/ability/nature/move edits are applied as-is; other tools may flag this as illegal.)"
+                var note = (speciesChanged || formChanged || abilityChanged || natureChanged || genderChanged || movesChanged)
+                    ? " (Species/form/ability/nature/gender/move edits are applied as-is; other tools may flag this as illegal.)"
                     : string.Empty;
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
                 RefreshHero(pk);
                 PopulateHeldItem(pk);
+                PopulatePpFields(pk);
+                RefreshComputed(pk);
                 RefreshLegality(pk);
 
                 // Design-notes.md Save button rule 3: return to disabled immediately after a

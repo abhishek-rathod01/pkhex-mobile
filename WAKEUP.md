@@ -16,7 +16,16 @@ newest first:
   if working with parallel subagents again; nothing wrong with the data
   itself, just a process lesson about `git commit` landing on the wrong
   branch under worktree isolation.
-- **In progress / next**: working through `CAPABILITY-GAPS.md` Tier A -
+- **Gender editing, manual PP/PP-Ups editing, and a read-only "Computed" card**
+  (battle stats/type chips/Hidden Power) on `PokemonDetailPage`, plus a
+  locked-slot guard in `PokemonSlotMover.MoveOrSwap`. Closes Tier A items
+  #3/#4/#5/#6/#7/#8 from `CAPABILITY-GAPS.md`. Full write-up (including a
+  real crash found and fixed mid-session - Gen1's raw species-type byte is
+  NOT safe to index into the modern type table directly) in `PROGRESS.md`'s
+  "Gender editing, manual PP/PP-Ups editing" section. Verified library-level
+  (`verify/GenderPPEdit`, new; `verify/BoxPartyMove`, extended with a
+  synthetically-locked-slot case) and on-device against `gen9_real.sav`.
+- **In progress / next**: continuing through `CAPABILITY-GAPS.md` Tier B -
   see "Next candidates" below for exactly where this session left off.
 
 ## `3d-models-experimental` branch (pushed, NOT merged - stays separate)
@@ -127,27 +136,28 @@ EntityImportSettings fix).
 
 ### Next candidates (from `CAPABILITY-GAPS.md`, highest value/lowest effort first)
 
-Ball and Friendship (items #1/#2 in the gap analysis) are now done - the
-next Tier A items, all small:
+**All of Tier A is now done** (Ball, Friendship, Gender, PP/PP-Ups, computed
+stats, type chip(s), Hidden Power, locked-slot guard - see the "Gender
+editing..." section of `PROGRESS.md` for the last five). Next up is Tier B,
+medium value/effort, in the gap doc's own priority order:
 
-- **Pokémon-level Gender editing** - `pk.Gender`, real from Gen4
-  (`PK4.cs:170`). Identical shape to the shipped Nature/Ability pickers.
-  `CAPABILITY-AUDIT.md` under-scoped this (buried in its traps section
-  instead of the main feature table).
-- **Manual PP / PP-Ups editing** - `pk.Move1_PP..4_PP`/`Move1_PPUps..`,
-  uniform across all generations. The app only ever calls `SetMoves`
-  (auto-max PP) today.
-- **Three read-only-safe display additions** (no legality-warning
-  treatment needed, same shape as the existing legality badge/type chips):
-  computed final stats (`Stat_HPMax`/`Stat_ATK`/etc. - the app shows the
-  *inputs* but never the resulting battle numbers), species type chip(s)
-  (reuses the move-type-chip component that already exists), and Hidden
-  Power type/power (derived from IVs, Gen2-7).
-- **Locked-slot guard in `PokemonSlotMover.MoveOrSwap`** - a hardening
-  item, not a feature: `BoxManagement`'s bulk sort/clear ops already check
-  `sav.IsAnySlotLockedInBox`; the per-slot move/swap path doesn't. One
-  guard, prevents overwriting battle-box/daycare/in-transit slots on later
-  gens.
+- **Origin/met data** (`pk.Version`, `MetLocation`, `MetLevel`,
+  `MetYear/Month/Day`, `EggLocation`) - **SPLIT**, met dates are
+  `virtual { get => 0; set { } }` pre-Gen4 (`PKM.cs:185-187`), real Gen4+.
+  Heavily legality-coupled (applied-as-is, same banner as everything else).
+- **Egg status/hatch** (`pk.IsEgg`, currently read-only in one spot;
+  `ForceHatchPKM`, `SetEggMetData`) - **SPLIT**, no eggs in Gen1.
+- **Bag/inventory editing** (`sav.Inventory` -> `PlayerBag.Pouches` ->
+  `InventoryPouch`) - medium-high, item ID spaces differ per gen but the
+  item-sprite keying problem is already solved elsewhere in this app.
+- **Markings** (`IAppliedMarkings<bool>`/`<MarkingColor>`) - **SPLIT**,
+  bool pre-Gen7, color Gen7+, none in Gen1/2. Cosmetic, low legality risk.
+- **Pokérus** (`pk.PokerusStrain`, `PokerusDays`) - **SPLIT**, absent Gen1.
+- **Characteristic string** (`EntityCharacteristic.GetCharacteristic`) -
+  tiny, read-only-safe, Gen3+. Natural pairing with the Computed card just
+  shipped (same card, one more line) if picked up.
+- **Box wallpaper/current box** (`IBoxDetailWallpaper`) - small-medium,
+  cosmetic.
 
 Full priority-ordered list with API citations, sizes, and per-generation
 scope in `CAPABILITY-GAPS.md`.
