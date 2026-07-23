@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:PkhexMobile"
+             x:Class="PkhexMobile.Model3DViewerPage"
+             x:DataType="local:Model3DViewerPage"
+             Title="3D Model">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <HybridWebView x:Name="ModelWebView" Grid.Row="0" HybridRoot="model3d" IsVisible="False" />
+
+        <!-- 2D fallback: shown when no .glb is bundled for this species, or the WebView/WebGL
+             stack fails to initialize (see LoadModel). Never a blank screen. -->
+        <VerticalStackLayout x:Name="FallbackPanel" Grid.Row="0" Spacing="12"
+                              VerticalOptions="Center" HorizontalOptions="Center" IsVisible="False">
+            <Image x:Name="FallbackSprite" WidthRequest="140" HeightRequest="140" Aspect="AspectFit" />
+            <Label x:Name="FallbackLabel" Style="{StaticResource MutedStyle}" HorizontalTextAlignment="Center"
+                   Margin="24,0" />
+        </VerticalStackLayout>
+
+        <Label Grid.Row="1" Text="Rotate and pinch-zoom the model. Source: github.com/Pokemon-3D-api/assets (.glb), rendered via the bundled model-viewer web component."
+               Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}" Padding="16,8" />
+
+    </Grid>
+
+</ContentPage>

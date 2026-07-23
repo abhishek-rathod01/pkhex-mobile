@@ -12,5 +12,6 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(PokemonTransferPage), typeof(PokemonTransferPage));
 		Routing.RegisterRoute(nameof(PokedexListPage), typeof(PokedexListPage));
 		Routing.RegisterRoute(nameof(PokedexDetailPage), typeof(PokedexDetailPage));
+		Routing.RegisterRoute(nameof(Model3DViewerPage), typeof(Model3DViewerPage));
 	}
 }

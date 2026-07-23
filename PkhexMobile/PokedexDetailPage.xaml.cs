@@ -99,6 +99,13 @@ public partial class PokedexDetailPage : ContentPage
         label.Text = PokedexService.GetTypeName(typeId).ToUpperInvariant();
     }
 
+    async void OnView3DClicked(object? sender, EventArgs e)
+    {
+        if (speciesId == 0)
+            return;
+        await Shell.Current.GoToAsync($"{nameof(Model3DViewerPage)}?speciesId={speciesId}");
+    }
+
     static void SetStat(ProgressBar bar, Label valueLabel, int value)
     {
         // 255 is the practical ceiling for any single base stat across the whole National Dex

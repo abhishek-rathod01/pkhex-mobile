@@ -12,6 +12,8 @@
             <Border Style="{StaticResource CardBorderStyle}">
                 <VerticalStackLayout Spacing="8" HorizontalOptions="Center">
                     <Image x:Name="SpriteImage" Aspect="AspectFit" WidthRequest="96" HeightRequest="96" />
+                    <Button x:Name="View3DBtn" Text="View in 3D" Style="{StaticResource GhostButtonStyle}"
+                            Clicked="OnView3DClicked" HorizontalOptions="Center" />
                     <Label x:Name="DexNumberLabel" Style="{StaticResource MonoMutedStyle}" HorizontalOptions="Center" />
                     <Label x:Name="NameLabel" Style="{StaticResource HeroTitleStyle}" HorizontalOptions="Center" />
                     <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
