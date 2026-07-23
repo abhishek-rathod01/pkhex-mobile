@@ -52,6 +52,14 @@ public partial class PokemonDetailPage : ContentPage
     bool metEditable;
     bool metDateEditable;
     bool eggEditable;
+    // IsEgg is real from Gen2 on (PK2.cs:112, plain auto-property); Gen1 is a hard no-op
+    // (PK1.cs:156 - RBY has no egg mechanic at all). Deliberately a PLAIN pk.IsEgg = value write,
+    // NOT PKHeX.Core's ForceHatchPKM/SetEggMetData - those auto-SUGGEST met location/date/version,
+    // which this project's standing "no auto-fix" rule (CLAUDE.md SS9) rules out. Gen3's setter has
+    // a real in-game side effect worth knowing (not a bug): setting it true also forces the
+    // nickname to the hardcoded Japanese egg name and language to Japanese (G3PKM.cs - real Gen3
+    // hardware behavior, every Gen3 egg displays that regardless of game language).
+    bool isEggEditable;
     // Picker index -> real value maps, rebuilt per Pokemon (location lists depend on both the
     // mon's own Version and format Context - see GameInfo.GetLocationList).
     readonly List<GameVersion> versionValues = new();
@@ -153,6 +161,7 @@ public partial class PokemonDetailPage : ContentPage
         // the read-only LegalityAnalysis badge's job to flag, not a picker guard's).
         PokerusStrainEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusStrainEntry, 15); MarkDirty(); };
         PokerusDaysEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusDaysEntry, 15); MarkDirty(); };
+        IsEggSwitch.Toggled += (_, _) => MarkDirty();
         VersionPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         MetLocationPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         // Met Level's real per-generation ceiling (Gen2's 6-bit field maxes at 63, Gen3's 7-bit at
@@ -566,6 +575,13 @@ public partial class PokemonDetailPage : ContentPage
         metEditable = p.Generation >= 2;
         metDateEditable = p.Generation >= 4;
         eggEditable = p.Generation >= 4;
+        isEggEditable = p.Generation >= 2;
+
+        IsEggSwitch.IsToggled = p.IsEgg;
+        IsEggSwitch.IsEnabled = isEggEditable;
+        IsEggCaptionLabel.Text = isEggEditable
+            ? "Is Egg"
+            : "Is Egg (no egg mechanic in Gen 1 - see PROGRESS.md)";
 
         versionValues.Clear();
         versionValues.AddRange(GameUtil.GetVersionsWithinRange(p, p.Context));
@@ -1340,6 +1356,10 @@ public partial class PokemonDetailPage : ContentPage
             }
         }
 
+        bool newIsEgg = pk.IsEgg;
+        if (isEggEditable)
+            newIsEgg = IsEggSwitch.IsToggled;
+
         GameVersion newVersion = pk.Version;
         if (versionEditable)
         {
@@ -1421,7 +1441,8 @@ public partial class PokemonDetailPage : ContentPage
         bool genderChanged = genderEditable && newGender != pk.Gender;
         bool movesChanged = newMoves[0] != pk.Move1 || newMoves[1] != pk.Move2 ||
                             newMoves[2] != pk.Move3 || newMoves[3] != pk.Move4;
-        bool originChanged = (versionEditable && newVersion != pk.Version) ||
+        bool originChanged = (isEggEditable && newIsEgg != pk.IsEgg) ||
+                             (versionEditable && newVersion != pk.Version) ||
                              (metEditable && (newMetLocation != pk.MetLocation || newMetLevel != pk.MetLevel)) ||
                              (metDateEditable && (newMetYear != pk.MetYear || newMetMonth != pk.MetMonth || newMetDay != pk.MetDay)) ||
                              (eggEditable && (newEggLocation != pk.EggLocation || newEggYear != pk.EggYear || newEggMonth != pk.EggMonth || newEggDay != pk.EggDay));
@@ -1507,6 +1528,11 @@ public partial class PokemonDetailPage : ContentPage
             // legality-coupled (met level/location/date vs. the species' real encounter table) but
             // applied exactly as chosen, same "report don't enforce" stance as everything else on
             // this page.
+            // IsEgg applied AFTER the Nickname line above (deliberately - Gen3's setter forces the
+            // egg nickname/language as a real hardware side effect, which should win over whatever
+            // the user typed in the Nickname field, same as the real games).
+            if (isEggEditable)
+                pk.IsEgg = newIsEgg;
             if (versionEditable)
                 pk.Version = newVersion;
             if (metEditable)

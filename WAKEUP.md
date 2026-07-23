@@ -67,11 +67,14 @@ pattern already used successfully for Track A this session).
   `DatePicker`. Verified library-level (`verify/OriginMetDataEdit`, Gen1-5/9) AND on-device against
   `gen9_real.sav` (real edit through the real picker/date-dialog UI, saved, pulled back, confirmed
   via a standalone check). Full write-up in PROGRESS.md.
-- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): egg status/hatch (note: Egg Location/Date
-  are now covered by the Origin card above - what's left here is specifically `pk.IsEgg`/
-  `ForceHatchPKM`/`SetEggMetData`, i.e. toggling egg-vs-hatched state itself), bag/inventory
-  editing, box wallpaper/current box. Priority order and API citations in `CAPABILITY-GAPS.md`
-  Part 2.
+- [x] **DONE**: Is Egg toggle (plain `Switch` at the top of the Origin card, direct `pk.IsEgg =
+  value` write - deliberately NOT the auto-suggesting `ForceHatchPKM`/`SetEggMetData` helpers, per
+  the standing no-auto-fix rule). Verified library-level (`verify/IsEggEdit`, Gen1-5/9, including
+  Gen3's real nickname-forcing side effect) and on-device toggle confirmed against `gen9_real.sav`.
+  This closes out CAPABILITY-GAPS.md Tier B #10 (egg status/hatch) together with the Egg
+  Location/Date fields already added in the Origin card above.
+- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): bag/inventory editing, box wallpaper/
+  current box. Priority order and API citations in `CAPABILITY-GAPS.md` Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery
   Gift, the single-generation interface cluster (Hyper Training/Tera type/size-scale/Dynamax/AVs/
   Memories/Super Training/tech records/HOME tracker/Alpha-Noble), QR import/export.

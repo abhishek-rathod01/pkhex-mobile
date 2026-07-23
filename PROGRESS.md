@@ -2138,3 +2138,23 @@ Android date dialog, saved, pulled the exported file, and confirmed via a standa
 `MetLocation` (80->108, resolving back to "Casseroya Lake (2)"), `MetLevel` (5->42), and `MetDate`
 (2022-11-10->2022-11-24) all persisted correctly with `CurrentHandler` and `Version` unchanged -
 a genuine on-device round-trip, not just a harness pass.
+
+## Is Egg toggle (CAPABILITY-GAPS.md Tier B #10, the part not covered by Egg Location/Date above)
+
+Added a plain "Is Egg" `Switch` to the top of the Origin card. Deliberately implemented as a direct
+`pk.IsEgg = value` write, NOT PKHeX.Core's `ForceHatchPKM`/`SetEggMetData` helpers - both of those
+auto-*suggest* a met location/date/version on hatch, which conflicts with this project's standing
+"no auto-legalization, no auto-fix" rule (SS9). A plain field write matches the "applied exactly as
+chosen" stance already used for every other field on this page.
+
+Confirmed via `verify/IsEggEdit`: `PK1.cs:156` is a hard no-op (`get => false; set { }` - RBY has no
+egg mechanic at all); `PK2.cs:112` is a plain real auto-property; Gen3's setter
+(`G3PKM`/`PK3.cs:147`) has a genuine in-game side effect worth knowing rather than a bug - setting
+it `true` also forces the nickname to the hardcoded Japanese egg name and the language to Japanese,
+matching real Gen3 hardware (every Gen3 egg displays that regardless of the game's own language);
+Gen4+ are a plain `IV32` bit flip with no side effect (the "Egg" nickname there is computed
+client-side from `IsEgg`, not stored). Applied after the Nickname line in the save handler so a
+Gen3 "Is Egg" toggle's forced nickname correctly wins over whatever the user typed, same as the
+real games. All 6 generations pass library-level, plus an on-device toggle confirmed rendering
+correctly against `gen9_real.sav` (default off, matching the mon's real non-egg status; toggles on
+and back off correctly).

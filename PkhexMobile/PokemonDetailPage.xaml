@@ -222,6 +222,15 @@
                 <VerticalStackLayout Spacing="10">
                     <Label Text="Origin" Style="{StaticResource SectionTitleStyle}" />
 
+                    <!-- IsEgg: real from Gen2 on (plain bit), hard no-op in Gen1 (no egg mechanic
+                         at all). A direct field toggle, not PKHeX.Core's auto-suggesting
+                         ForceHatchPKM/SetEggMetData helpers - same "applied exactly as chosen"
+                         stance as every other field here. -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label x:Name="IsEggCaptionLabel" Text="Is Egg" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" x:Name="IsEggSwitch" />
+                    </Grid>
+
                     <Label x:Name="VersionCaptionLabel" Text="Game Version" Style="{StaticResource LabelCaptionStyle}" />
                     <Picker x:Name="VersionPicker" Title="Select version" />
 
