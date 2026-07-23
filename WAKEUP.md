@@ -30,11 +30,20 @@ pattern already used successfully for Track A this session).
   for a missing species (#521). Full write-up in `PROGRESS.md`'s "Track C-2" section on that
   branch. **Merge to master intentionally left undecided** - the ~214MB size tradeoff deserves a
   deliberate call, not a default merge; flagged for the user's own review.
-- [x] **DONE**: Characteristic string (Computed card) and Pokerus Strain/Days editing (Main card),
-  both on `PokemonDetailPage`. Both verified library-level and on-device (`gen9_real.sav`). See
-  `PROGRESS.md`'s "Characteristic string" and "Pokerus editing" sections.
+- [x] **DONE**: Characteristic string (Computed card), Pokerus Strain/Days editing (Main card),
+  and Markings editing (new "Markings" card), all on `PokemonDetailPage`. All verified
+  library-level and on-device (`gen9_real.sav`). Markings hunt turned up a real on-device
+  rendering bug (not data loss) - see `PROGRESS.md`'s "Markings editing" section for the
+  Unicode-emoji-presentation root cause and fix.
+- [x] **Investigated (not fixed)**: the off-colour/untextured 3D model appearance, per explicit
+  user request. Confirmed no separate full-scale model source exists at the assets repo; confirmed
+  the .glb files DO have real embedded WebP-textured materials; root cause narrowed to a plausible
+  but NOT conclusively confirmed `EXT_texture_webp` handling gap in the vendored model-viewer
+  build - needs a JS console listener wired into `HybridWebView` (doesn't exist yet) to actually
+  see the in-page error before attempting a fix. See `PROGRESS.md`'s "Texture investigation"
+  section on the `3d-models-experimental` branch for the full evidence trail.
 - [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): origin/met data, egg status/hatch,
-  bag/inventory editing, markings, box wallpaper/current box. Priority order and API citations in
+  bag/inventory editing, box wallpaper/current box. Priority order and API citations in
   `CAPABILITY-GAPS.md` Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery
   Gift, the single-generation interface cluster (Hyper Training/Tera type/size-scale/Dynamax/AVs/
