@@ -8,34 +8,16 @@ must **commit but NOT push** (a prior subagent's `git push` triggered a permissi
 couldn't answer while asleep - the orchestrator pushes on its behalf afterward instead, same
 pattern already used successfully for Track A this session).
 
-- [ ] **In progress right now**: Pokedex "where to catch" feature - species -> encounter
-  locations/games/methods (via `EncounterMovesetGenerator.GenerateEncounters`, PUBLIC PKHeX.Core
-  API - no network needed) + Mega Evolution trigger items (via `ItemStorage9ZA
-  .GetExpectedMegaStoneOrPrimalOrb`, also PUBLIC). Encounter **rate/%** is explicitly NOT available
-  in PKHeX.Core (confirmed - the 8-byte slot struct has no room for it) and will be marked as such
-  in the UI rather than faked or network-fetched. See `verify/EncounterLocationData` (in progress)
-  for the proof-of-concept and the real bugs already caught there (HOME-era context
-  double/quadruple-counting; resolving a Gen3 location ID with a Gen9 format's name table produced
-  nonsense names - both fixed in the harness, not yet ported to production code).
-- [ ] Port the verified `EncounterLocationData` logic into `PokedexService.cs` as a real method,
-  with a final GLOBAL dedup pass across all generation-contexts scanned (not just per-context -
-  the same Gen3 egg fact currently gets rediscovered once per later generation scanned and needs
-  collapsing to one row).
-- [ ] Wire a new "Where to Find" (+ "Mega Evolution" trigger item, if applicable) card into
-  `PokedexDetailPage`, styled consistently with existing cards (`CardBorderStyle`, etc.) - keep it
-  readable given the row-count even after grouping (Eevee/Pikachu-tier species can still have 50+
-  grouped rows across 9 generations; consider collapsing to "per current-era game" by default with
-  an expand affordance, rather than a wall of text - use judgment, this is a real design problem,
-  not just a data problem).
-- [ ] Once the flavor-text Haiku subagent (already running in the background as of this writing)
-  completes: verify its output honestly (per this project's own hard-won §8 lesson - re-run/spot
-  check, don't trust the self-report), wire `Resources/Raw/dexentries/*.json` into
-  `PkhexMobile.csproj` as a `MauiAsset`, and add a "Dex Entries" section to `PokedexDetailPage`
-  showing per-game flavor text (a picker or scrollable list keyed by game version).
-- [ ] Shiny sprite display in the Pokedex detail screen: sprites are **already 100% covered**
-  (1025/1025 regular + 1025 shiny, confirmed by direct file count - no fetch needed). Just needs a
-  UI toggle/button on `PokedexDetailPage` to flip `SpriteHelper.SpeciesSpriteFile(id, shiny: true)`,
-  mirroring the existing shiny-star pattern already shipped on `PokemonDetailPage`.
+- [x] **DONE**: Pokedex "Where to Find" card (species -> encounter locations/games/methods via
+  `EncounterMovesetGenerator.GenerateEncounters`, PUBLIC PKHeX.Core API, no network) + Mega
+  Evolution trigger items (via `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb`, also PUBLIC) +
+  Dex Entries per-game flavor text (bundled from PokeAPI via a Haiku subagent, all 1025 species) +
+  a shiny sprite toggle. Full write-up in `PROGRESS.md`'s "Pokedex 'Where to Find'..." section,
+  including a **real on-device ANR** found and fixed (the encounter scan was synchronous on the UI
+  thread; fixed with `Task.Run` + a loading state + a stale-species guard). Verified on-device
+  against Charizard (Megas) and Pikachu (largest encounter set, 161 wild rows alone) with no ANR
+  and correct "+N more" capping. Encounter rate/% confirmed NOT available in PKHeX.Core at all -
+  stated explicitly in the UI rather than network-fetched or estimated.
 - [ ] **Fetch real `.glb` 3D models** (Track C-2 from earlier in this session, deliberately deferred,
   now explicitly requested) - dispatch as the ONE Haiku subagent slot once the flavor-text agent
   finishes (not before - only one at a time). Source: `github.com/Pokemon-3D-api/assets`. Target:

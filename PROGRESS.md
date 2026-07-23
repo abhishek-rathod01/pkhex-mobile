@@ -1865,3 +1865,116 @@ round-tripped through the real `FileSaver` write path and were confirmed in
 the exported file; Computed card showed Fire/Ghost typing, battle stats
 (367/196/247/281/201/212), and "Hidden Power: Dark", with no layout issues
 scrolling through the new UI.
+
+## Pokedex "Where to Find" + Mega trigger items + Dex Entries + shiny toggle (2026-07-23, `master`)
+
+Direct user request mid-session: "make the pokedex extremely detailed" - where to catch a
+species, in which games, at what locations, plus what Mega Evolution needs. Four additions to
+`PokedexDetailPage`, all reference-only (no loaded save required, same as the rest of the
+Pokedex feature).
+
+### Where to Find (species -> games/locations/methods)
+
+`PokedexService.GetEncounterLocations` - built on `EncounterMovesetGenerator.GenerateEncounters`,
+a **public** PKHeX.Core API (the same one backing PKHeX's own "Encounter Database" tool) - no
+network dependency, no hand-inverted per-generation area tables. Proven in a throwaway-then-kept
+harness (`verify/EncounterLocationData`) before any UI was written, per this project's own
+methodology, against 5 species chosen for risk coverage: Charizard (Megas, multi-gen history),
+Eevee (branching evolutions), Mewtwo (legendary, static-only), Piplup (starter, gift-only),
+Pikachu (highest-volume wild encounter species - a stress test).
+
+Two real layers of duplication were found and fixed while building the harness, both empirical,
+neither obvious in advance:
+- `GameUtil.GetVersionsWithinRange` special-cases "HOME era" contexts (Gen8+): it returns each
+  such format's full ID range unrestricted rather than limiting to that context's own generation,
+  so scanning Gen8/Gen8a/Gen8b/Gen9 separately re-discovers the same encounters ~4x over. Fixed:
+  scan the whole HOME-connected block once, via Gen9 alone.
+- Independent of that, an early-generation Egg/Static encounter is still a legitimate explanation
+  for a Pokemon currently sitting in a *later* generation's format (bred in Ruby, transferred
+  forward) - so the same fact gets rediscovered once per later generation-context scanned even
+  after the first fix. Fixed: dedupe **globally** across every context scanned, not per-context.
+
+A third, purely-a-bug (not a duplication) issue: location names must be resolved using the
+**encounter's own** generation, not the scanning context's - resolving a Gen3 Ruby/Sapphire egg's
+location ID with generation=9 (the context being scanned) produced a nonsense modern Paldea
+location name for an old game. Caught in the harness before it ever reached production code.
+
+Categorized into Wild / Static-Gift / Egg / Trade / Raid / Mystery-Gift-Event (via `IEncounterEgg`,
+`MysteryGift`, and `enc.Name` pattern matching - PKHeX.Core doesn't expose this categorization on
+the returned object itself, though it uses an equivalent internal `EncounterTypeGroup` for its own
+dispatch). Mystery Gift events are individually real but far too numerous/granular to list
+one-by-one (Pikachu alone has ~48 distinct past distribution events across 13 games) - collapsed
+to one summary line. Each other category is capped at 12 rows with a "+N more" note for on-screen
+readability (Pikachu has 161 wild-encounter rows alone across 9 generations of games) -
+`EncounterCategoryDisplay` in `PokedexDetailDisplay.cs`.
+
+**Encounter rate/probability is explicitly not shown, and this is stated in the UI itself** -
+PKHeX.Core's encounter data has no such field at all (the Gen9 slot struct, for example, is fully
+accounted for by species/form/gender/level-range/time/weather - no room left for a rate byte).
+This is legality-grade "is this possible" data, not a game-guide "how common" database; the
+caption under the card's title says so rather than omitting the limitation silently.
+
+**Real on-device bug found and fixed**: the first version of this feature called
+`GetEncounterLocations` synchronously from `LoadSpecies` (the same method that populates every
+other card on this page). For Charizard this caused an actual **ANR** ("PkhexMobile isn't
+responding") that was still unresponsive after 45+ seconds of tapping "Wait." Every other lookup
+on this page (base stats, abilities, forms, evolution chain) is an instant pre-computed table
+read; encounter scanning is not - it walks up to 9 `EntityContext`s and, for a heavily-encountered
+species, produces 1000+ raw records before deduplication. Fixed by moving the call to
+`Task.Run` (`LoadEncounterLocationsAsync`), with a loading-state label shown until it resolves and
+a stale-species guard (captures `speciesId` before the `await`, skips repainting if the user
+navigated away mid-scan). Confirmed on-device afterward: Charizard and Pikachu (the two most
+expensive cases tested) both load their "Where to Find" card without any ANR, each producing the
+expected row counts and "+N more" captions.
+
+### Mega Evolution trigger items
+
+`PokedexService.GetMegaTriggerItem` - `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb(species,
+form)`, a complete real PKHeX.Core table (not hand-built), confirmed against Charizard X/Y,
+Mewtwo X/Y, and Groudon/Kyogre Primal Reversion in `verify/EncounterLocationData`. Wired into the
+existing Forms card's `FormEntryDisplay.Note` (previously a generic "Mega Evolution (battle-only
+form)" caption) - now reads "Mega Evolution - requires holding Charizardite X, used in battle"
+when the lookup resolves, falling back to the old generic caption if it doesn't (form-index
+alignment between `GetFormNames`' de-duplicated union list and the real form byte
+`ItemStorage9ZA` expects isn't guaranteed for every species, only confirmed correct for the common
+Gen6-origin Mega case - see the code comment on `FormEntryDisplay.MegaItemId`).
+
+### Dex Entries (per-game flavor text)
+
+Unlike everything else in the Pokedex feature, this is **not** sourced from PKHeX.Core - a
+legality/save-editing library has no reason to carry hand-written game flavor text. Fetched ahead
+of time from PokeAPI by a Haiku subagent (dispatched in an isolated worktree per this project's
+collision-avoidance convention) covering all 1025 species across 34 game versions, bundled as
+`Resources/Raw/dexentries/flavortext.json` (~2.6MB MauiAsset, picked up automatically by the
+existing recursive `Resources\Raw\**` glob - no `.csproj` change needed). Loaded lazily/async and
+cached (`PokedexFlavorTextService`) so it never blocks page render.
+
+The prior session's item-data subagent had made a real mistake worth avoiding here (pulled item
+descriptions in French by not filtering the `language` field) - this agent's brief explicitly
+called that out, and its output was independently spot-checked (not just trusted) before merging:
+confirmed English-only, 1025/1025 species present, whitespace-normalized, no French markers found
+in a text scan. **Sibling versions with verbatim-identical flavor text are grouped** (e.g. "Black,
+Black 2, White, White 2" as one entry) rather than repeating the same paragraph 2-4 times, since
+PokeAPI's data frequently has this redundancy) - grouped by exact text match, order preserved from
+first occurrence.
+
+Agent's commit landed correctly on its own worktree branch this time (`git log` confirmed before
+merging) - contrast with the earlier Track A incident this session where a worktree agent's commit
+landed on `master` instead. Pushed to `origin/pokedex-flavortext-data` for durability, then merged
+into `master` (clean merge, no conflicts), worktree removed and pruned.
+
+### Shiny toggle
+
+Sprite assets were already 100% complete for all 1025 species (both regular and shiny) before this
+session even started - confirmed by direct file count, no fetch needed. Just a `Button` on the
+hero card flipping `SpriteHelper.SpeciesSpriteFile(id, shiny: true/false)`, mirroring the
+shiny-star treatment already shipped on `PokemonDetailPage` - here it's a user choice (reference
+browsing has no real mon whose `IsShiny` to read), not a computed fact from a loaded save.
+
+### Not done in this pass
+
+- Encounter rate/probability - not available in PKHeX.Core at all, explicitly noted in the UI
+  rather than network-fetched (PokeAPI's own encounter-rate data is spotty and worst exactly where
+  it matters most, modern SV/newer games) or estimated.
+- Per-form encounter/Mega data for alternate forms beyond the base species - `Form` is hardcoded
+  to 0 for this whole page, same constraint the rest of the Pokedex detail screen already has.

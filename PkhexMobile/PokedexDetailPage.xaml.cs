@@ -12,6 +12,7 @@ namespace PkhexMobile;
 public partial class PokedexDetailPage : ContentPage
 {
     ushort speciesId;
+    bool showingShiny;
     const byte Form = 0; // base form only - alternate forms are listed read-only in the Forms card
 
     public string SpeciesIdParam
@@ -38,11 +39,13 @@ public partial class PokedexDetailPage : ContentPage
 
     void LoadSpecies()
     {
+        showingShiny = false;
         string name = PokedexService.GetSpeciesName(speciesId);
         Title = name;
         NameLabel.Text = name;
         DexNumberLabel.Text = $"#{speciesId:D4}";
         SpriteImage.Source = SpriteHelper.SpeciesSpriteFile(speciesId, shiny: false);
+        ShinyToggleBtn.Text = "View Shiny";
 
         var (type1, type2, hasSecond) = PokedexService.GetTypeIds(speciesId, Form);
         SetTypeChip(Type1Chip, Type1Label, type1);
@@ -71,7 +74,7 @@ public partial class PokedexDetailPage : ContentPage
             for (int i = 0; i < formNames.Length; i++)
             {
                 string formName = string.IsNullOrEmpty(formNames[i]) ? name : formNames[i];
-                forms.Add(new FormEntryDisplay(i, formName));
+                forms.Add(new FormEntryDisplay(i, formName, speciesId));
             }
             FormsCard.IsVisible = true;
             BindableLayout.SetItemsSource(FormsList, forms);
@@ -86,6 +89,95 @@ public partial class PokedexDetailPage : ContentPage
             .Select(n => new EvoNodeDisplay(n, n.Species == speciesId && n.Form == Form))
             .ToList());
         EvolutionSingleLabel.IsVisible = chain.Count <= 1;
+
+        // Both fire-and-forget, not awaited, so neither blocks the rest of the page rendering:
+        // flavor text needs async file I/O (a bundled MauiAsset JSON); encounter-location data is
+        // the one PKHeX.Core lookup on this page that ISN'T instant - EncounterMovesetGenerator
+        // scans across up to 9 EntityContexts and, for a heavily-encountered species like
+        // Charizard or Pikachu, produces 1000+ raw records to walk and dedupe. Calling it
+        // synchronously from LoadSpecies caused a real on-device ANR ("PkhexMobile isn't
+        // responding"), confirmed still unresponsive after 45+ seconds of "Wait" - this is NOT a
+        // quick synchronous PKHeX.Core call like the ones above it (base stats/abilities/forms/
+        // evolution are all pre-computed table lookups; encounter scanning is not). Task.Run keeps
+        // it off the UI thread entirely; the card shows a loading state until it resolves.
+        _ = LoadFlavorTextAsync();
+        _ = LoadEncounterLocationsAsync();
+    }
+
+    async Task LoadFlavorTextAsync()
+    {
+        var entries = await PokedexFlavorTextService.GetEntriesAsync(speciesId);
+        BindableLayout.SetItemsSource(DexEntriesList, entries);
+        DexEntriesEmptyLabel.IsVisible = entries.Count == 0;
+    }
+
+    void OnShinyToggleClicked(object? sender, EventArgs e)
+    {
+        showingShiny = !showingShiny;
+        SpriteImage.Source = SpriteHelper.SpeciesSpriteFile(speciesId, shiny: showingShiny);
+        ShinyToggleBtn.Text = showingShiny ? "View Regular" : "View Shiny";
+    }
+
+    // "Where to Find" card: species -> games/methods/locations, sourced entirely from
+    // PKHeX.Core's own legality-grade encounter tables (see PokedexService.GetEncounterLocations
+    // for the full sourcing story and the two layers of duplication found and fixed while building
+    // it). Grouped into a fixed category order rather than PokedexService's own enum declaration
+    // order, since Wild/Static/Egg read most naturally first for a "how do I catch this" question.
+    //
+    // Runs on a background thread (Task.Run) - see the comment in LoadSpecies for why this one
+    // PKHeX.Core call, unlike every other lookup on this page, is NOT fast enough to call directly
+    // from the UI thread (a real on-device ANR was caused by an earlier synchronous version of
+    // this method).
+    async Task LoadEncounterLocationsAsync()
+    {
+        ushort requestedSpecies = speciesId; // captured before the await - see the guard below
+        EncounterLoadingLabel.IsVisible = true;
+        EncounterCategoriesList.IsVisible = false;
+
+        var rows = await Task.Run(() => PokedexService.GetEncounterLocations(requestedSpecies, Form));
+
+        // If the user navigated to a different species while this was running (this page instance
+        // could in principle be reused, matching the same defensive pattern already used for the
+        // move-picker chips elsewhere in this app), don't paint stale data over the new species.
+        if (requestedSpecies != speciesId)
+            return;
+
+        EncounterLoadingLabel.IsVisible = false;
+        EncounterCategoriesList.IsVisible = true;
+
+        var categories = new List<EncounterCategoryDisplay>();
+
+        void AddCategory(PokedexService.EncounterCategory cat, string title)
+        {
+            var matches = rows.Where(r => r.Category == cat).ToList();
+            if (matches.Count == 0)
+                return;
+
+            if (cat == PokedexService.EncounterCategory.EventGift)
+            {
+                // Individually real, historical, and far too numerous/granular to list one-by-one
+                // (Pikachu alone has ~48 distinct past distribution events across 13 games) -
+                // collapsed to one summary line instead.
+                int events = matches.Sum(r => r.Count);
+                int games = matches.Select(r => r.Version).Distinct().Count();
+                categories.Add(new EncounterCategoryDisplay(title, [],
+                    $"Available via {events} past Mystery Gift distribution event(s) across {games} game(s) - most are no longer obtainable."));
+                return;
+            }
+
+            categories.Add(new EncounterCategoryDisplay(title, [.. matches.Select(r => new EncounterRowDisplay(r))], null));
+        }
+
+        AddCategory(PokedexService.EncounterCategory.Wild, "Wild Encounter");
+        AddCategory(PokedexService.EncounterCategory.StaticGift, "Static / Gift Encounter");
+        AddCategory(PokedexService.EncounterCategory.Egg, "Breeding (Egg)");
+        AddCategory(PokedexService.EncounterCategory.Trade, "In-Game Trade");
+        AddCategory(PokedexService.EncounterCategory.Raid, "Raid Battle");
+        AddCategory(PokedexService.EncounterCategory.EventGift, "Mystery Gift Event");
+
+        BindableLayout.SetItemsSource(EncounterCategoriesList, categories);
+        EncounterEmptyLabel.IsVisible = categories.Count == 0;
+        EncounterRateNoteLabel.IsVisible = categories.Count > 0;
     }
 
     static void SetTypeChip(Border chip, Label label, byte typeId)

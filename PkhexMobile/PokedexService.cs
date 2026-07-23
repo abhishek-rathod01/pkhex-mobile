@@ -246,4 +246,128 @@ public static class PokedexService
             _ => ($"{m.Method} (Lv.{m.Level})", false, 0),
         };
     }
+
+    // Contexts scanned for encounter data. GameUtil.GetVersionsWithinRange special-cases "HOME
+    // era" contexts (Gen8+): it returns each such format's full ID range unrestricted rather than
+    // limiting to that context's own generation, so Gen8/Gen8a/Gen8b/Gen9 all resolve to nearly the
+    // same modern HOME-connected window - confirmed empirically in verify/EncounterLocationData
+    // (scanning all four separately re-discovered the same encounters ~4x over). Gen9 alone covers
+    // that whole block; pre-HOME generations (1-7, plus Gen7b for Let's Go specifically, which is
+    // NOT HOME-era) still need their own separate scan since those genuinely don't overlap.
+    private static readonly EntityContext[] EncounterContexts =
+    [
+        EntityContext.Gen1, EntityContext.Gen2, EntityContext.Gen3, EntityContext.Gen4,
+        EntityContext.Gen5, EntityContext.Gen6, EntityContext.Gen7, EntityContext.Gen7b,
+        EntityContext.Gen9,
+    ];
+
+    public enum EncounterCategory { Wild, StaticGift, Egg, Trade, Raid, EventGift }
+
+    public readonly record struct EncounterRow(GameVersion Version, EncounterCategory Category, string Location, byte LevelMin, byte LevelMax, int Count);
+
+    /// <summary>
+    /// Where/how a species can be obtained, across every generation PKHeX.Core models, sourced
+    /// entirely from PKHeX.Core's own legality-grade encounter tables (the same data used to
+    /// validate save files) - no network dependency, same as the rest of this service.
+    ///
+    /// Built on <see cref="EncounterMovesetGenerator.GenerateEncounters"/> (PUBLIC - the same API
+    /// backing PKHeX's own "Encounter Database" tool), called once per <see cref="EncounterContexts"/>
+    /// entry against a "rough" blank <see cref="PKM"/> with only Species/Form set, then merged.
+    ///
+    /// Two layers of real duplication had to be found and collapsed (both confirmed empirically in
+    /// verify/EncounterLocationData before this method existed):
+    ///  - Per-context redundancy from the HOME-era range behavior noted on <see cref="EncounterContexts"/>.
+    ///  - Cross-context redundancy: an early-generation Egg/Static encounter is legitimately still a
+    ///    valid explanation for a Pokemon currently in a LATER generation's format (bred in Ruby,
+    ///    transferred forward), so the same fact gets rediscovered once per later generation scanned
+    ///    even after the first fix - this method dedupes GLOBALLY across every context scanned, not
+    ///    per-context.
+    ///
+    /// Each returned <see cref="EncounterRow.Count"/> folds together every raw encounter that
+    /// collapsed to the same (Version, Category, Location, LevelMin, LevelMax) - e.g. 6 wild slots
+    /// differing only by time-of-day/weather become one row with Count=6, not 6 rows.
+    ///
+    /// Explicitly NOT included: encounter RATE/percentage. PKHeX.Core's encounter slot data has no
+    /// field for it at all (the 8-byte Gen9 slot struct, for example, is fully accounted for by
+    /// species/form/gender/level range/time/weather - there's no room left for a rate byte); this
+    /// is legality-grade "is this possible" data, not a game-guide "how common" database. The
+    /// caller/UI should say so explicitly rather than omit it silently.
+    /// </summary>
+    public static List<EncounterRow> GetEncounterLocations(ushort species, byte form)
+    {
+        var raw = new List<(GameVersion Version, EncounterCategory Category, string Location, byte LevelMin, byte LevelMax)>();
+
+        foreach (var context in EncounterContexts)
+        {
+            PKM pk;
+            try { pk = EntityBlank.GetBlank(context); }
+            catch { continue; } // some context/format combinations aren't constructible - skip, don't fail the whole card
+
+            if (species > pk.MaxSpeciesID)
+                continue; // this format structurally cannot represent this species - not an error
+
+            pk.Species = species;
+            pk.Form = form;
+
+            List<IEncounterable> found;
+            try { found = EncounterMovesetGenerator.GenerateEncounters(pk, ReadOnlyMemory<ushort>.Empty).ToList(); }
+            catch { continue; }
+
+            foreach (var enc in found)
+            {
+                // Resolved using the ENCOUNTER's own generation, not the scanning context's - a real
+                // bug caught in verify/EncounterLocationData: resolving a Gen3 Ruby/Sapphire egg's
+                // location ID using generation=9 (the scanning context) produced a nonsense modern
+                // Paldea location name for an old game. Met Location IDs are only meaningful within
+                // their own generation's table.
+                byte encGen = (byte)enc.Version.Generation;
+                string loc = GameInfo.Strings.GetLocationName(false, enc.Location, encGen, encGen, enc.Version);
+                if (string.IsNullOrWhiteSpace(loc) || loc is "(None)" or "——————")
+                    loc = "";
+                raw.Add((enc.Version, Categorize(enc), loc, enc.LevelMin, enc.LevelMax));
+            }
+        }
+
+        return raw
+            .GroupBy(r => (r.Version, r.Category, r.Location, r.LevelMin, r.LevelMax))
+            .Select(g => new EncounterRow(g.Key.Version, g.Key.Category, g.Key.Location, g.Key.LevelMin, g.Key.LevelMax, g.Count()))
+            .OrderBy(r => r.Version.Generation).ThenBy(r => r.Category).ThenBy(r => r.Version)
+            .ToList();
+    }
+
+    // Categorized by concrete type/name rather than hand-invented per-species logic - PKHeX.Core
+    // already sorts encounters into this shape internally (EncounterTypeGroup, used by
+    // EncounterMovesetGenerator's own dispatch), just not exposed on the returned object, so this
+    // reproduces the same buckets via the public IEncounterEgg/MysteryGift markers plus enc.Name
+    // (the exhaustive real Name strings across every encounter template class were surveyed in
+    // verify/EncounterLocationData before writing this list - e.g. "Wild Encounter (X)", "GO
+    // Encounter (GO)", "Entree Forest Encounter", "Dream Radar Encounter", "Pokéwalker Encounter").
+    private static EncounterCategory Categorize(IEncounterable enc)
+    {
+        if (enc is IEncounterEgg)
+            return EncounterCategory.Egg;
+        if (enc is MysteryGift)
+            return EncounterCategory.EventGift;
+        if (enc.Name.Contains("Trade"))
+            return EncounterCategory.Trade;
+        if (enc.Name.Contains("Raid"))
+            return EncounterCategory.Raid;
+        if (enc.Name.Contains("Wild Encounter") || enc.Name.Contains("GO Encounter") ||
+            enc.Name.Contains("Entree Forest") || enc.Name.Contains("Dream Radar") || enc.Name.Contains("Pokéwalker"))
+            return EncounterCategory.Wild;
+        return EncounterCategory.StaticGift;
+    }
+
+    /// <summary>
+    /// The Mega Stone / Primal Orb item required to Mega Evolve/Primal Revert into
+    /// <paramref name="form"/>, or 0 if this species/form isn't a Mega/Primal form at all.
+    /// Sourced from <see cref="ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb"/> - a complete real
+    /// PKHeX.Core table (confirmed against Charizard X/Y, Mewtwo X/Y, Groudon/Kyogre Primal in
+    /// verify/EncounterLocationData), not something this app hand-builds or guesses at.
+    /// </summary>
+    public static ushort GetMegaTriggerItem(ushort species, byte form) =>
+        ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb(species, form);
+
+    public static string GetItemName(int itemId) =>
+        itemId > 0 && itemId < GameInfo.Strings.Item.Count ? GameInfo.Strings.Item[itemId] : $"item #{itemId}";
 }

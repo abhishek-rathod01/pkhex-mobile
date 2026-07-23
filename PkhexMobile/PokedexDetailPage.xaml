@@ -12,6 +12,13 @@
             <Border Style="{StaticResource CardBorderStyle}">
                 <VerticalStackLayout Spacing="8" HorizontalOptions="Center">
                     <Image x:Name="SpriteImage" Aspect="AspectFit" WidthRequest="96" HeightRequest="96" />
+                    <!-- Shiny toggle: sprite assets are already 100% complete for all 1025 species
+                         (both regular and shiny), so this is purely a display switch - no fetch
+                         needed. Mirrors the shiny-star treatment already shipped on
+                         PokemonDetailPage, but here it's a user choice (reference browsing has no
+                         real mon whose IsShiny to read), not a computed fact. -->
+                    <Button x:Name="ShinyToggleBtn" Text="View Shiny" Style="{StaticResource GhostButtonStyle}"
+                            Clicked="OnShinyToggleClicked" HorizontalOptions="Center" />
                     <Label x:Name="DexNumberLabel" Style="{StaticResource MonoMutedStyle}" HorizontalOptions="Center" />
                     <Label x:Name="NameLabel" Style="{StaticResource HeroTitleStyle}" HorizontalOptions="Center" />
                     <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
@@ -28,6 +35,28 @@
                             <Label x:Name="Type2Label" FontFamily="ManropeBold" FontSize="{StaticResource TextXs}" />
                         </Border>
                     </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Dex Entries: per-game flavor text. NOT from PKHeX.Core (a legality/save-editing
+                 library has no reason to carry hand-written game text) - bundled ahead of time from
+                 PokeAPI as a MauiAsset, loaded lazily/async so it never blocks the rest of this
+                 page (see PokedexDetailPage.LoadFlavorTextAsync). -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Dex Entries" Style="{StaticResource SectionTitleStyle}" />
+                    <Label Text="Source: PokeAPI (bundled, offline)" Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}" />
+                    <Label x:Name="DexEntriesEmptyLabel" Text="No dex entry text available for this species." Style="{StaticResource MutedStyle}" IsVisible="False" />
+                    <VerticalStackLayout x:Name="DexEntriesList" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="local:PokedexFlavorTextEntry">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding GameDisplayName}" Style="{StaticResource LabelCaptionStyle}" />
+                                    <Label Text="{Binding Text}" Style="{StaticResource BodyStyle}" LineBreakMode="WordWrap" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
@@ -127,6 +156,55 @@
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Where to Find: species -> games/methods/locations, sourced from PKHeX.Core's own
+                 legality-grade encounter tables (PokedexService.GetEncounterLocations). Encounter
+                 RATE/percentage is deliberately not shown - PKHeX.Core's encounter data has no such
+                 field at all (confirmed: the Gen9 slot struct is fully accounted for by species/
+                 form/gender/level/time/weather, no room left for a rate byte), so this is honest
+                 about the limitation rather than omitting it silently. -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Where to Find" Style="{StaticResource SectionTitleStyle}" />
+                    <Label Text="Source: PKHeX.Core encounter data (all generations). Encounter rate/probability is not available from this data source."
+                           Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}" />
+                    <Label x:Name="EncounterEmptyLabel"
+                           Text="No catchable/obtainable encounter found in PKHeX.Core's data (may be a starter, gift-only via an event not modeled here, or otherwise unobtainable through normal play)."
+                           Style="{StaticResource MutedStyle}" IsVisible="False" />
+                    <Label x:Name="EncounterLoadingLabel" Text="Scanning encounter data across all generations..."
+                           Style="{StaticResource MutedStyle}" IsVisible="True" />
+
+                    <VerticalStackLayout x:Name="EncounterCategoriesList" Spacing="14" IsVisible="False">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="local:EncounterCategoryDisplay">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="{Binding Title}" Style="{StaticResource RowTitleStyle}" />
+                                    <Label Text="{Binding SummaryOverride}" IsVisible="{Binding HasSummaryOverride}"
+                                           Style="{StaticResource MutedStyle}" LineBreakMode="WordWrap" />
+                                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowRows}"
+                                                         BindableLayout.ItemsSource="{Binding ShownRows}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="local:EncounterRowDisplay">
+                                                <Grid ColumnDefinitions="56,*,Auto" ColumnSpacing="8">
+                                                    <Label Grid.Column="0" Text="{Binding GameLabel}" Style="{StaticResource MonoMutedStyle}" />
+                                                    <Label Grid.Column="1" Text="{Binding LocationLabel}" Style="{StaticResource BodyStyle}" LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="2" Text="{Binding LevelLabel}" Style="{StaticResource MutedStyle}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                    <Label Text="{Binding MoreText}" IsVisible="{Binding HasMore}"
+                                           Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Label x:Name="EncounterRateNoteLabel"
+                           Text="Rows grouped by game/location/level range; repeated variants (e.g. time-of-day) are folded together. Some categories are capped for readability - see &quot;+N more&quot;."
+                           Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}" IsVisible="False" />
                 </VerticalStackLayout>
             </Border>
 
