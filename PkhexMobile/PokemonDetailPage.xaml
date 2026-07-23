@@ -50,7 +50,7 @@
                     <RoundRectangle CornerRadius="12" />
                 </Border.StrokeShape>
                 <Label x:Name="LegalityWarningLabel"
-                       Text="⚠ Species, form, ability, nature, gender, and move edits are applied exactly as chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged as illegal by other tools. This is expected."
+                       Text="⚠ Species, form, ability, nature, gender, move, and origin/met-data edits are applied exactly as chosen. PKHeX.Core does not auto-fix legality, so the result may be flagged as illegal by other tools. This is expected."
                        Style="{StaticResource WarningBannerStyle}"
                        LineBreakMode="WordWrap" />
             </Border>
@@ -206,6 +206,44 @@
                             </Border.GestureRecognizers>
                         </Border>
                     </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Origin / Met data: where and how this Pokemon was obtained. Version/MetLocation/
+                 MetLevel are real from Gen2 (Version fixed in Gen1/2 - PK1.cs:148/PK2.cs:115 - real
+                 from Gen3, PK3.cs:135; MetLocation/MetLevel no-op only in Gen1 - PK1.cs:152/154, real
+                 from Gen2's CaughtData bitfield - PK2.cs:88-90). Met/Egg dates and Egg Location are
+                 no-op pre-Gen4 (PKM.cs's base virtual { get => 0; set { } } / G3PKM.cs:41's sealed
+                 override) and real from Gen4 (PK4.cs's Data[0x78..0x7D] block) - verified in
+                 verify/OriginMetDataEdit. Location pickers are sourced from GameInfo.GetLocationList,
+                 the same per-version/context-aware API PKHeX Desktop itself uses (handles the Gen4
+                 DP/Pt/HGSS and Gen8 BD/SP location-list splits internally - not hand-rolled here). -->
+            <Border x:Name="OriginCard" Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Origin" Style="{StaticResource SectionTitleStyle}" />
+
+                    <Label x:Name="VersionCaptionLabel" Text="Game Version" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="VersionPicker" Title="Select version" />
+
+                    <Label x:Name="MetLocationCaptionLabel" Text="Met Location" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="MetLocationPicker" Title="Select met location" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Grid.Column="0" Spacing="4">
+                            <Label x:Name="MetLevelCaptionLabel" Text="Met Level" Style="{StaticResource LabelCaptionStyle}" />
+                            <Entry x:Name="MetLevelEntry" Keyboard="Numeric" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Label x:Name="MetDateCaptionLabel" Text="Met Date" Style="{StaticResource LabelCaptionStyle}" />
+                            <DatePicker x:Name="MetDatePicker" Format="d" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Label x:Name="EggLocationCaptionLabel" Text="Egg Location" Style="{StaticResource LabelCaptionStyle}" />
+                    <Picker x:Name="EggLocationPicker" Title="Select egg location" />
+
+                    <Label x:Name="EggDateCaptionLabel" Text="Egg Date" Style="{StaticResource LabelCaptionStyle}" />
+                    <DatePicker x:Name="EggDatePicker" Format="d" />
                 </VerticalStackLayout>
             </Border>
 

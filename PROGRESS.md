@@ -2096,3 +2096,45 @@ recomputes without throwing on a mon carrying every new field at once, and the o
 disk is byte-for-byte unchanged. All 5 generations pass. No cross-feature interaction bug found -
 this was a clean confirmation pass, not a bug hunt that turned something up. Hardcodes local save
 paths (like `BallFriendshipEdit` and friends) - excluded from CI.
+
+## Origin / Met data editing (CAPABILITY-GAPS.md Tier B #9)
+
+New "Origin" card on `PokemonDetailPage`: Game Version, Met Location, Met Level, Met Date, Egg
+Location, Egg Date. Confirmed per-generation split via `verify/OriginMetDataEdit` before touching
+production code: **Version** is fixed in Gen1/2 (`PK1.cs:148` RBY, `PK2.cs:115` GSC, both
+`set { }`), real from Gen3 (`PK3.cs:135`). **Met Location/Level** are no-op only in Gen1
+(`PK1.cs:152/154`), real from Gen2's `CaughtData` bitfield (`PK2.cs:88-90`) - one gate for both,
+they're either both stored or neither is. **Met/Egg dates and Egg Location** are no-op pre-Gen4
+(`PKM.cs`'s base virtual `{ get => 0; set { } }` defaults / `G3PKM.cs:41`'s sealed override) and
+real from Gen4 (`PK4.cs`'s `Data[0x78..0x7D]` block).
+
+Location pickers are sourced from `GameInfo.GetLocationList(version, context, egg)` - the same
+per-version/context-aware API PKHeX Desktop itself uses for its own location dropdowns. It
+internally handles the Gen3 R/S/E/FR/LG partition, the Gen4 DP/Pt/HGSS split, and the Gen8 BD/SP
+list swap - none of that per-generation branching is hand-rolled here. Version picker sourced from
+`GameUtil.GetVersionsWithinRange(pk, pk.Context)` (the same encounter-scanning API the Pokedex
+"Where to Find" feature already uses) + `GameInfo.GetVersionName`. If a stored location ID isn't in
+the current version's own list (e.g. a mon transferred in from another game), a synthetic
+`"(current: N)"` entry is prepended rather than silently dropping the real value - same "never
+silently swap a real stored value" precedent as the held-item picker's ID filtering.
+
+Met/Egg dates use MAUI's native `DatePicker` rather than three raw numeric Entries (Year/Month/
+Day) - a deliberate nicer-UX choice over this page's usual Entry-grid pattern, made safe by a
+`SafeDate` helper that clamps an unset `00/00/00` (true for every pre-Gen4 mon, and any Gen4+ mon
+that's never had its egg data set) to `Month/Day = 1` rather than throwing on construction; the
+write path reads `DatePicker.Date` back as `.Value ?? DateTime.Today` since MAUI's `Date` property
+is nullable even though a concrete value is always assigned during load.
+
+None of these fields feed the party stat block (same `statsAffected` exclusion as Ball/Friendship/
+Gender/Pokerus) but ARE flagged in the existing "applied as-is" warning note (heavily
+legality-coupled per CAPABILITY-GAPS.md - met level/location/date vs. the species' real encounter
+table - but reported, not enforced, same stance as every other field on this page).
+
+Verified both library-level (`verify/OriginMetDataEdit`, all of Gen1/2/3/4/5/9 pass, including a
+`GetLocationName` resolve-without-throwing check) and **on-device against `gen9_real.sav`**: opened
+the real Met Location picker (correctly pre-selected on "Cabo Poco", the mon's true stored value),
+selected "Casseroya Lake (2)", edited Met Level to 42 and Met Date to 11/24/2022 via the native
+Android date dialog, saved, pulled the exported file, and confirmed via a standalone check that
+`MetLocation` (80->108, resolving back to "Casseroya Lake (2)"), `MetLevel` (5->42), and `MetDate`
+(2022-11-10->2022-11-24) all persisted correctly with `CurrentHandler` and `Version` unchanged -
+a genuine on-device round-trip, not just a harness pass.

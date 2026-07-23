@@ -42,6 +42,22 @@ public partial class PokemonDetailPage : ContentPage
     // PK2.cs:83-84). Gen1 is a hard no-op (PK1.cs:149-150) - RBY has no Pokerus mechanic at all.
     bool pokerusEditable;
 
+    // Origin/Met data. Version is fixed in Gen1/2 (PK1.cs:148 RBY, PK2.cs:115 GSC - both
+    // `set { }`), real from Gen3 (PK3.cs:135). MetLocation/MetLevel are no-op only in Gen1
+    // (PK1.cs:152/154), real from Gen2's CaughtData bitfield (PK2.cs:88-90) - one shared gate for
+    // both, they're either both stored or neither is. Met/Egg dates and Egg Location are no-op
+    // pre-Gen4 (PKM.cs's base virtual defaults / G3PKM.cs:41's sealed override) and real from Gen4
+    // (PK4.cs's Data[0x78..0x7D] block) - verified in verify/OriginMetDataEdit.
+    bool versionEditable;
+    bool metEditable;
+    bool metDateEditable;
+    bool eggEditable;
+    // Picker index -> real value maps, rebuilt per Pokemon (location lists depend on both the
+    // mon's own Version and format Context - see GameInfo.GetLocationList).
+    readonly List<GameVersion> versionValues = new();
+    readonly List<ushort> metLocationValues = new();
+    readonly List<ushort> eggLocationValues = new();
+
     // Markings: no marking concept exists at all in Gen1/2 (neither interface implemented - not
     // merely a no-op). None = card disabled/explained; Bool = Gen3 (4 markings)/Gen4-6 (6
     // markings), on/off, tap toggles; Color = Gen7+ (6 markings), None/Blue/Pink, tap cycles.
@@ -93,6 +109,13 @@ public partial class PokemonDetailPage : ContentPage
     {
         InitializeComponent();
 
+        // MetYear/EggYear are single bytes storing "years since 2000" (PKM.cs:215-234) - the
+        // real hardware range these dates can ever represent.
+        MetDatePicker.MinimumDate = new DateTime(2000, 1, 1);
+        MetDatePicker.MaximumDate = new DateTime(2099, 12, 31);
+        EggDatePicker.MinimumDate = new DateTime(2000, 1, 1);
+        EggDatePicker.MaximumDate = new DateTime(2099, 12, 31);
+
         IvAtkEntry.TextChanged += OnIvIndependentEntryTextChanged;
         IvDefEntry.TextChanged += OnIvIndependentEntryTextChanged;
         IvSpaEntry.TextChanged += OnIvIndependentEntryTextChanged;
@@ -130,6 +153,15 @@ public partial class PokemonDetailPage : ContentPage
         // the read-only LegalityAnalysis badge's job to flag, not a picker guard's).
         PokerusStrainEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusStrainEntry, 15); MarkDirty(); };
         PokerusDaysEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusDaysEntry, 15); MarkDirty(); };
+        VersionPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        MetLocationPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        // Met Level's real per-generation ceiling (Gen2's 6-bit field maxes at 63, Gen3's 7-bit at
+        // 127) is always >= 100, the actual in-game level cap - clamping the UI to 100 rather than
+        // the wider bit-max matches the PP-Ups precedent (real ceiling shown, not the theoretical one).
+        MetLevelEntry.TextChanged += (_, _) => { ClampEntryToMax(MetLevelEntry, 100); MarkDirty(); };
+        MetDatePicker.DateSelected += (_, _) => MarkDirty();
+        EggLocationPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        EggDatePicker.DateSelected += (_, _) => MarkDirty();
         // PP is stored as a single byte in every generation (e.g. PK9.cs:340 `Data[0x7A] = (byte)value`),
         // so 0-255 is the real hard ceiling everywhere - clamped live like the IV/EV fields, same
         // defensive-backstop precedent. PP Ups' real ceiling is 3 (the "PP Up" item's max stack
@@ -336,6 +368,7 @@ public partial class PokemonDetailPage : ContentPage
         PopulateGenderPicker(p);
         PopulatePokerus(p);
         PopulateMarkings(p);
+        PopulateOrigin(p);
         PopulatePpFields(p);
         RefreshComputed(p);
         RefreshLegality(p);
@@ -512,6 +545,100 @@ public partial class PokemonDetailPage : ContentPage
         PokerusCaptionLabel.Text = pokerusEditable
             ? "Pokerus"
             : "Pokerus (not stored in Gen 1 - see PROGRESS.md)";
+    }
+
+    // Clamps a computed calendar date into a DatePicker-safe DateTime. A stored 00/00/00 (never
+    // set - true for every pre-Gen4 mon, and for a Gen4+ mon that was never actually caught/bred
+    // with real date tracking on) can't be represented as-is; Month/Day default to the 1st rather
+    // than throwing, same "clamp for display, real value still recoverable via the caption/disabled
+    // state" precedent as the IV/EV fields.
+    private static DateTime SafeDate(byte yearOffset, byte month, byte day)
+    {
+        int year = 2000 + yearOffset;
+        int m = Math.Clamp((int)month, 1, 12);
+        int d = Math.Clamp((int)day, 1, DateTime.DaysInMonth(year, m));
+        return new DateTime(year, m, d);
+    }
+
+    private void PopulateOrigin(PKM p)
+    {
+        versionEditable = p.Generation >= 3;
+        metEditable = p.Generation >= 2;
+        metDateEditable = p.Generation >= 4;
+        eggEditable = p.Generation >= 4;
+
+        versionValues.Clear();
+        versionValues.AddRange(GameUtil.GetVersionsWithinRange(p, p.Context));
+        VersionPicker.ItemsSource = versionValues.Select(GameInfo.GetVersionName).ToList();
+        VersionPicker.SelectedIndex = versionValues.IndexOf(p.Version);
+        VersionPicker.IsEnabled = versionEditable;
+        VersionCaptionLabel.Text = versionEditable
+            ? "Game Version"
+            : "Game Version (fixed - see PROGRESS.md)";
+
+        // Met Location's own list depends on the mon's CURRENT Version/Context (GameInfo's own
+        // per-generation lookup key) - built once at load, same "not live-refreshed against a
+        // pending Version edit" precedent as every other cross-field picker on this page (e.g.
+        // Form doesn't live-refresh the Ability list either).
+        metLocationValues.Clear();
+        var metLocations = GameInfo.GetLocationList(p.Version, p.Context, egg: false);
+        metLocationValues.AddRange(metLocations.Select(c => (ushort)c.Value));
+        MetLocationPicker.ItemsSource = metLocations.Select(c => c.Text).ToList();
+        int metIdx = metLocationValues.IndexOf(p.MetLocation);
+        if (metIdx < 0 && metLocationValues.Count > 0)
+        {
+            // The stored value isn't in this version's own list (e.g. transferred-in from another
+            // game) - prepend a synthetic entry so the real value is still visible, not silently
+            // swapped for whatever the picker defaults to. Same "never silently drop a real stored
+            // value" precedent as the held-item picker's unused-ID filtering.
+            metLocationValues.Insert(0, p.MetLocation);
+            var items = MetLocationPicker.ItemsSource.Cast<string>().ToList();
+            items.Insert(0, $"(current: {p.MetLocation})");
+            MetLocationPicker.ItemsSource = items;
+            metIdx = 0;
+        }
+        MetLocationPicker.SelectedIndex = metIdx;
+        MetLocationPicker.IsEnabled = metEditable;
+        MetLocationCaptionLabel.Text = metEditable
+            ? "Met Location"
+            : "Met Location (not stored in Gen 1 - see PROGRESS.md)";
+
+        MetLevelEntry.Text = p.MetLevel.ToString();
+        MetLevelEntry.IsEnabled = metEditable;
+        MetLevelCaptionLabel.Text = metEditable
+            ? "Met Level"
+            : "Met Level (not stored in Gen 1 - see PROGRESS.md)";
+
+        MetDatePicker.Date = SafeDate(p.MetYear, p.MetMonth, p.MetDay);
+        MetDatePicker.IsEnabled = metDateEditable;
+        MetDateCaptionLabel.Text = metDateEditable
+            ? "Met Date"
+            : "Met Date (not tracked before Gen 4 - see PROGRESS.md)";
+
+        eggLocationValues.Clear();
+        var eggLocations = GameInfo.GetLocationList(p.Version, p.Context, egg: true);
+        eggLocationValues.AddRange(eggLocations.Select(c => (ushort)c.Value));
+        EggLocationPicker.ItemsSource = eggLocations.Select(c => c.Text).ToList();
+        int eggIdx = eggLocationValues.IndexOf(p.EggLocation);
+        if (eggIdx < 0 && eggLocationValues.Count > 0)
+        {
+            eggLocationValues.Insert(0, p.EggLocation);
+            var items = EggLocationPicker.ItemsSource.Cast<string>().ToList();
+            items.Insert(0, $"(current: {p.EggLocation})");
+            EggLocationPicker.ItemsSource = items;
+            eggIdx = 0;
+        }
+        EggLocationPicker.SelectedIndex = eggIdx;
+        EggLocationPicker.IsEnabled = eggEditable;
+        EggLocationCaptionLabel.Text = eggEditable
+            ? "Egg Location"
+            : "Egg Location (not stored before Gen 4 - see PROGRESS.md)";
+
+        EggDatePicker.Date = SafeDate(p.EggYear, p.EggMonth, p.EggDay);
+        EggDatePicker.IsEnabled = eggEditable;
+        EggDateCaptionLabel.Text = eggEditable
+            ? "Egg Date"
+            : "Egg Date (not tracked before Gen 4 - see PROGRESS.md)";
     }
 
     (Border Chip, Label Glyph)[] MarkingChips => new[]
@@ -1213,6 +1340,66 @@ public partial class PokemonDetailPage : ContentPage
             }
         }
 
+        GameVersion newVersion = pk.Version;
+        if (versionEditable)
+        {
+            if (VersionPicker.SelectedIndex < 0 || VersionPicker.SelectedIndex >= versionValues.Count)
+            {
+                SaveStatusLabel.Text = "Select a game version before saving.";
+                return;
+            }
+            newVersion = versionValues[VersionPicker.SelectedIndex];
+        }
+
+        ushort newMetLocation = pk.MetLocation;
+        byte newMetLevel = pk.MetLevel;
+        if (metEditable)
+        {
+            if (MetLocationPicker.SelectedIndex < 0 || MetLocationPicker.SelectedIndex >= metLocationValues.Count)
+            {
+                SaveStatusLabel.Text = "Select a met location before saving.";
+                return;
+            }
+            newMetLocation = metLocationValues[MetLocationPicker.SelectedIndex];
+            if (!TryParseStat(MetLevelEntry.Text, 100, out var metLevel))
+            {
+                // Defensive clamp backstop: the live TextChanged handler already prevents typing
+                // past 100 (the real in-game level cap - see MetLevelEntry's constructor wiring).
+                SaveStatusLabel.Text = "Met Level must be a number between 0 and 100.";
+                return;
+            }
+            newMetLevel = (byte)metLevel;
+        }
+
+        byte newMetYear = pk.MetYear, newMetMonth = pk.MetMonth, newMetDay = pk.MetDay;
+        if (metDateEditable)
+        {
+            // MinimumDate/MaximumDate are set in the constructor and PopulateOrigin always
+            // assigns a concrete Date, so this is never actually null in practice - .Value keeps
+            // the write path's arithmetic on a plain DateTime rather than threading nullability
+            // through every field below.
+            var d = MetDatePicker.Date ?? DateTime.Today;
+            newMetYear = (byte)(d.Year - 2000);
+            newMetMonth = (byte)d.Month;
+            newMetDay = (byte)d.Day;
+        }
+
+        ushort newEggLocation = pk.EggLocation;
+        byte newEggYear = pk.EggYear, newEggMonth = pk.EggMonth, newEggDay = pk.EggDay;
+        if (eggEditable)
+        {
+            if (EggLocationPicker.SelectedIndex < 0 || EggLocationPicker.SelectedIndex >= eggLocationValues.Count)
+            {
+                SaveStatusLabel.Text = "Select an egg location before saving.";
+                return;
+            }
+            newEggLocation = eggLocationValues[EggLocationPicker.SelectedIndex];
+            var ed = EggDatePicker.Date ?? DateTime.Today;
+            newEggYear = (byte)(ed.Year - 2000);
+            newEggMonth = (byte)ed.Month;
+            newEggDay = (byte)ed.Day;
+        }
+
         // PP/PP-Ups are uniform across every generation (no editable-gate needed, unlike the fields
         // above) - resolved and validated the same way regardless of format.
         if (!TryParseStat(Move1PpEntry.Text, 255, out var move1Pp) || !TryParseStat(Move1PpUpsEntry.Text, 3, out var move1PpUps) ||
@@ -1234,6 +1421,10 @@ public partial class PokemonDetailPage : ContentPage
         bool genderChanged = genderEditable && newGender != pk.Gender;
         bool movesChanged = newMoves[0] != pk.Move1 || newMoves[1] != pk.Move2 ||
                             newMoves[2] != pk.Move3 || newMoves[3] != pk.Move4;
+        bool originChanged = (versionEditable && newVersion != pk.Version) ||
+                             (metEditable && (newMetLocation != pk.MetLocation || newMetLevel != pk.MetLevel)) ||
+                             (metDateEditable && (newMetYear != pk.MetYear || newMetMonth != pk.MetMonth || newMetDay != pk.MetDay)) ||
+                             (eggEditable && (newEggLocation != pk.EggLocation || newEggYear != pk.EggYear || newEggMonth != pk.EggMonth || newEggDay != pk.EggDay));
 
         // A change to any of these makes the stored party stat block (HP/Atk/.../Stat_Level)
         // stale, so it must be recomputed below. Captured before mutation. Form and Nature both
@@ -1311,6 +1502,31 @@ public partial class PokemonDetailPage : ContentPage
                 pk.PokerusStrain = newPokerusStrain;
                 pk.PokerusDays = newPokerusDays;
             }
+            // Origin/Met data doesn't feed the stat block either - it's provenance, not a computed
+            // value - same statsAffected exclusion as Ball/Friendship/Gender/Pokerus above. Heavily
+            // legality-coupled (met level/location/date vs. the species' real encounter table) but
+            // applied exactly as chosen, same "report don't enforce" stance as everything else on
+            // this page.
+            if (versionEditable)
+                pk.Version = newVersion;
+            if (metEditable)
+            {
+                pk.MetLocation = newMetLocation;
+                pk.MetLevel = newMetLevel;
+            }
+            if (metDateEditable)
+            {
+                pk.MetYear = newMetYear;
+                pk.MetMonth = newMetMonth;
+                pk.MetDay = newMetDay;
+            }
+            if (eggEditable)
+            {
+                pk.EggLocation = newEggLocation;
+                pk.EggYear = newEggYear;
+                pk.EggMonth = newEggMonth;
+                pk.EggDay = newEggDay;
+            }
             // Markings are cosmetic (player-sorting aid), no stat/legality effect at all - same
             // statsAffected exclusion as everything else above, but doesn't even need a "changed"
             // flag since there's no legality-warning note tied to this field.
@@ -1380,14 +1596,15 @@ public partial class PokemonDetailPage : ContentPage
                 // Reinforce the caveat at the moment it matters: only when the user actually
                 // changed species/form/ability/nature/moves, so a plain nickname/stat edit isn't
                 // nagged.
-                var note = (speciesChanged || formChanged || abilityChanged || natureChanged || genderChanged || movesChanged)
-                    ? " (Species/form/ability/nature/gender/move edits are applied as-is; other tools may flag this as illegal.)"
+                var note = (speciesChanged || formChanged || abilityChanged || natureChanged || genderChanged || movesChanged || originChanged)
+                    ? " (Species/form/ability/nature/gender/move/origin edits are applied as-is; other tools may flag this as illegal.)"
                     : string.Empty;
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
                 RefreshHero(pk);
                 PopulateHeldItem(pk);
                 PopulatePokerus(pk);
                 PopulateMarkings(pk);
+                PopulateOrigin(pk);
                 PopulatePpFields(pk);
                 RefreshComputed(pk);
                 RefreshLegality(pk);

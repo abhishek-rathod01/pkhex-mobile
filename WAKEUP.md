@@ -61,9 +61,17 @@ pattern already used successfully for Track A this session).
   harnesses - none of this session's 6 hardcoded-local-path harnesses (GenderPPEdit,
   EncounterLocationData, CharacteristicDisplay, PokerusEdit, MarkingsEdit, CombinedFieldSave) can
   break CI.
-- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): origin/met data, egg status/hatch,
-  bag/inventory editing, box wallpaper/current box. Priority order and API citations in
-  `CAPABILITY-GAPS.md` Part 2.
+- [x] **DONE**: Origin/Met data editing (Version, Met Location/Level/Date, Egg Location/Date) - new
+  "Origin" card on `PokemonDetailPage`. Location pickers sourced from PKHeX.Core's own
+  `GameInfo.GetLocationList` (real location names, not raw IDs); dates use a native MAUI
+  `DatePicker`. Verified library-level (`verify/OriginMetDataEdit`, Gen1-5/9) AND on-device against
+  `gen9_real.sav` (real edit through the real picker/date-dialog UI, saved, pulled back, confirmed
+  via a standalone check). Full write-up in PROGRESS.md.
+- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): egg status/hatch (note: Egg Location/Date
+  are now covered by the Origin card above - what's left here is specifically `pk.IsEgg`/
+  `ForceHatchPKM`/`SetEggMetData`, i.e. toggling egg-vs-hatched state itself), bag/inventory
+  editing, box wallpaper/current box. Priority order and API citations in `CAPABILITY-GAPS.md`
+  Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery
   Gift, the single-generation interface cluster (Hyper Training/Tera type/size-scale/Dynamax/AVs/
   Memories/Super Training/tech records/HOME tracker/Alpha-Noble), QR import/export.
