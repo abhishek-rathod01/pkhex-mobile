@@ -1690,3 +1690,85 @@ strict ancestor of `master`) were removed after verification
 file referenced a path from the agent's own execution environment that
 didn't resolve on this host - `git worktree prune` handled the stale
 administrative state).
+
+## 3D model viewer, branch `3d-models-experimental` (2026-07-23)
+
+`Model3DViewerPage`, reachable from the Pokedex detail screen's new "View in
+3D" button (`PokedexDetailPage.OnView3DClicked`). Renders a bundled `.glb`
+via the vendored `model-viewer` web component inside a `HybridWebView`;
+falls back to the existing 2D sprite when no model is bundled for that
+species. Committed `068c14b` on `3d-models-experimental`, **not merged to
+master** - this branch is intentionally experimental per the original task
+scope and stays separate until real models exist and it's been reviewed.
+
+### Why HybridWebView, not a plain WebView
+
+A plain `WebView` pointed at a `file://` URL into `FileSystem.CacheDirectory`
+fails on-device with `net::ERR_ACCESS_DENIED` - Android's WebView renderer
+runs in a sandboxed process that cannot read the app's own private storage
+via `file://`, even though the main app process can read/write there freely.
+`HybridWebView`'s virtual host (`HybridRoot="model3d"`, serving the
+`MauiAsset`-bundled `Resources/Raw/model3d/**` files over an internal
+virtual origin `https://0.0.0.1/`) sidesteps this entirely.
+
+### Six attempts to find a working per-species parameterization
+
+The interesting part of this feature wasn't rendering a `.glb` (that worked
+first try, confirmed with a hardcoded `<model-viewer src>` and a public-domain
+test duck model) - it was passing *which* model to load into a page that's
+otherwise identical for every species. In order:
+
+1. **JS↔C# bridge, `EvaluateJavaScriptAsync` from `WebViewInitialized`** -
+   threw `InvalidOperationException: PlatformView cannot be null here`; that
+   event fires before the handler's native view is assigned.
+2. **Same call, delayed** - past the crash, but the DOM wasn't ready yet:
+   `Uncaught TypeError: Cannot read properties of null (reading
+   'setAttribute')` (`document.getElementById('mv')` was null).
+3. **JS-side `window.HybridWebView.sendRawMessage('ready')` handshake**,
+   gating the C# call on `RawMessageReceived` - the "ready" message never
+   arrived. A direct C#→JS probe (`typeof window.HybridWebView`) round-tripped
+   as empty with no exception and no console error. The bridge itself does
+   not work reliably on this MAUI/WebView version, independent of DOM timing.
+   A separate hardcoded-`src` control test on the same build proved the
+   render pipeline (HybridWebView virtual host → model-viewer → WebGL) works
+   correctly - isolating the fault to the bridge specifically.
+4. **`DefaultFile = "index.html?glb=models/{id}.glb"`**, read via
+   `location.search` - `net::ERR_INVALID_RESPONSE at https://0.0.0.1/`.
+5. **`DefaultFile = "index.html#glb=models/{id}.glb"`**, read via
+   `location.hash`, on the theory that URL fragments are never sent as part
+   of any resource request (true, per the URL spec) - produced the
+   **identical** `net::ERR_INVALID_RESPONSE`. This was the surprising result:
+   it proved `HybridWebView.DefaultFile` is matched against the bundled
+   asset set as a **literal filename string**, not parsed as a URL at all -
+   neither query nor fragment syntax reaches a resolver that would strip it,
+   because there is no such parsing step.
+6. **`DefaultFile` swapped to a second real, distinct, literal filename**
+   (`s6.html`, a file identical to the working hardcoded-src control but
+   bundled under a different name) - confirmed on-device: renders correctly,
+   and re-navigates correctly on a second `DefaultFile` assignment. This is
+   the mechanism the shipped code uses: one real `model_{speciesId}.html`
+   file per bundled model (see `Resources/Raw/model3d/README.md` for the
+   generation convention), gated by `FileSystem.OpenAppPackageFileAsync`
+   existence-checking that exact file before navigating.
+
+No `.glb` files are bundled as of this commit (the test duck and its
+throwaway test page were deleted before committing) - every species
+currently shows the 2D-sprite fallback. Verified on-device that this fallback
+path is clean (no Chromium error page) for a species with no bundled model,
+which is every species right now - this matters because the query-string/
+fragment attempts, if left wired to a nonexistent per-species page, would
+have surfaced exactly the same `net::ERR_INVALID_RESPONSE` Chrome error page
+to a real user the moment any model was added, rather than the intended
+fallback.
+
+### Not done in this pass
+
+- **Track C-2 (fetching real `.glb` models from `github.com/Pokemon-3D-api/
+  assets`) was not run.** Given no models exist yet, generating per-species
+  `model_{id}.html` wrapper pages ahead of time was judged premature
+  (would-be dead code pointing at nonexistent files) - the convention and
+  generation template are documented in the README instead, to be produced
+  alongside each real model as it's added.
+- Not merged to `master`.
+- Alternate forms (Mega/regional/Gmax) all resolve to the base species' model
+  slot - no separate per-form model lookup yet.

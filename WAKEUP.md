@@ -1,6 +1,43 @@
 # WAKEUP — read this first
 
-**Session completed 2026-07-22, in two parts.** Part 1 (below the fold)
+**Session 2026-07-23 (overnight, unattended): Pokedex browse UI + experimental
+3D viewer, then started on the `CAPABILITY-GAPS.md` Tier A backlog.** Summary,
+newest first:
+
+## `master` branch (pushed, clean)
+
+- **Pokedex browse/detail screens** (`PokedexListPage`/`PokedexDetailPage`/
+  `PokedexService`) - full National Dex #1-1025 browsing with search/gen
+  filter, base stats, abilities, forms (Mega/Gmax/regional), and full
+  branching evolution chains with item cross-references, all sourced from
+  PKHeX.Core directly (no network dependency). Not tied to a loaded save.
+  Reference/item data assembled by a subagent (`Pokedex-manifest.json`,
+  `item-info.md`) - see the "Worktree isolation gap" note in `PROGRESS.md`
+  if working with parallel subagents again; nothing wrong with the data
+  itself, just a process lesson about `git commit` landing on the wrong
+  branch under worktree isolation.
+- **In progress / next**: working through `CAPABILITY-GAPS.md` Tier A -
+  see "Next candidates" below for exactly where this session left off.
+
+## `3d-models-experimental` branch (pushed, NOT merged - stays separate)
+
+3D model viewer (`Model3DViewerPage`, "View in 3D" button on the Pokedex
+detail screen), `HybridWebView` + the vendored `model-viewer` web component,
+2D-sprite fallback when no model is bundled. **No `.glb` files are bundled
+yet** - Track C-2 (fetching real models from `github.com/Pokemon-3D-api/
+assets`) was deliberately not run this session (see PROGRESS.md's "Not done
+in this pass" - judged lower priority than the Tier A gap backlog once the
+viewer mechanism itself was proven working). Full write-up, including the
+six-attempt debugging history for the per-species parameterization
+mechanism, in `PROGRESS.md`'s "3D model viewer" section. Do not merge to
+master without first adding real models and running an on-device pass with
+at least one real model bundled (only the 2D fallback path has been
+verified on-device so far - the actual render-a-real-model path was only
+proven with a public-domain test duck, since removed).
+
+---
+
+**Previous session (2026-07-22), in two parts.** Part 1 (below the fold)
 closed the previous session's three handoff items. Part 2, at the very top
 of this file, ran two tracks in parallel: Track A (a subagent) audited the
 docs and mapped remaining PKHeX.Core capability into `CAPABILITY-GAPS.md`;
