@@ -23,17 +23,24 @@ newest first:
 
 3D model viewer (`Model3DViewerPage`, "View in 3D" button on the Pokedex
 detail screen), `HybridWebView` + the vendored `model-viewer` web component,
-2D-sprite fallback when no model is bundled. **No `.glb` files are bundled
-yet** - Track C-2 (fetching real models from `github.com/Pokemon-3D-api/
-assets`) was deliberately not run this session (see PROGRESS.md's "Not done
-in this pass" - judged lower priority than the Tier A gap backlog once the
-viewer mechanism itself was proven working). Full write-up, including the
-six-attempt debugging history for the per-species parameterization
-mechanism, in `PROGRESS.md`'s "3D model viewer" section. Do not merge to
-master without first adding real models and running an on-device pass with
-at least one real model bundled (only the 2D fallback path has been
-verified on-device so far - the actual render-a-real-model path was only
-proven with a public-domain test duck, since removed).
+2D-sprite fallback when no model is bundled. **Update (later same session):
+933/974 real `.glb` models now fetched and bundled** (+213.9MB, via a Haiku
+subagent, independently verified before merging - see `PROGRESS.md`'s
+"Track C-2: real .glb models fetched..." section for the full write-up,
+including a worktree-branch-name discrepancy that required hash-level
+verification to resolve, and a process note that the first dispatch attempt
+correctly did nothing because its worktree had branched from `master`
+instead of this branch). **On-device pass with a real model now done**:
+Charizard's real bundled model renders and is interactive; the model
+appears untextured (flat tan, not Charizard's real coloring) - a
+source-data quality issue in the `Pokemon-3D-api/assets` repo's "optimized"
+variant, not a bug in this app's pipeline. 2D-sprite fallback re-confirmed
+correct for a missing species (#521, one of 44 gaps - gender-variant IDs
+like `521-F` with no plain numeric counterpart in the source repo).
+**Merge to master is still not decided** - the original on-device blocker
+is now closed, but the ~214MB asset-size tradeoff deserves a deliberate
+go/no-go rather than a default merge. See `PROGRESS.md` for the full list
+of what's still open (texture quality, the 44 missing IDs, per-form models).
 
 ---
 

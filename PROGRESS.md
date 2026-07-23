@@ -1772,3 +1772,65 @@ fallback.
 - Not merged to `master`.
 - Alternate forms (Mega/regional/Gmax) all resolve to the base species' model
   slot - no separate per-form model lookup yet.
+
+## Track C-2: real `.glb` models fetched + on-device pass with a real model (2026-07-23)
+
+Fetched from `github.com/Pokemon-3D-api/assets`'s `models/opt/regular/` directory via a Haiku
+subagent (dispatched twice - the first attempt's worktree accidentally branched from `master`,
+which doesn't have this feature's files at all, so it correctly did nothing rather than proceed
+blind; redispatched after switching the orchestrator's own checkout to `3d-models-experimental`
+first, which fixed it). **933 of 974 available species IDs** now have a real `models/{id}.glb` +
+matching `model_{id}.html` wrapper, committed in 3 incremental batches (species 1-150, 151-300,
+301-974) totaling **213.9MB**. 44 IDs from the source repo were skipped (base numeric IDs only,
+per the README's documented base-species/form-0 scope - the missing ones are gender-specific
+variants like `521-F`/`668-M` with no plain numeric counterpart in that repo, e.g. 521, 668,
+850-854, 859-861, 863-864, 866, 868, 873, 878-879, 882-883, 916).
+
+**Independently verified before merging/pushing** (per this project's own precedent of not
+trusting subagent self-reports blindly): confirmed via `git diff --stat` that zero `.cs`/`.xaml`/
+doc files were touched; spot-checked file sizes across all 933 `.glb` files programmatically (none
+under 1KB, ruling out silent zero-byte download failures); confirmed a sample of the generated
+`model_{id}.html` wrapper pages match the documented template exactly (a harmless UTF-8 BOM is
+present at the start of each, which HTML5 parsers accept transparently before `<!DOCTYPE html>` -
+not worth rewriting 933 files to strip).
+
+**A process wrinkle worth recording**: the agent's *own* `git branch --show-current`/`git log`
+self-report referenced a branch name (`worktree-agent-<id>`) whose local ref, when checked from
+the orchestrator side, pointed at the *orchestrator's* unrelated concurrent `master` work instead
+of the agent's actual commits - a discrepancy from the "Worktree isolation gap" documented earlier
+this session, but with a different concrete mechanism: this agent's worktree had in fact been
+checked out directly on `3d-models-experimental` itself (confirmed via `git worktree list` showing
+`[3d-models-experimental]` against that worktree path), and the stray branch name/ref was an
+unrelated artifact from the harness's own bookkeeping - the *actual* commits (verified via
+`git cat-file -t <hash>` against the exact hashes the agent's self-report listed, and via
+`git merge-base` confirming a clean fast-forward chain from `3d-models-experimental`'s prior tip)
+were correctly present and correctly based the whole time. Net effect: no data was lost or
+misplaced, but the ref name printed by the agent's own `git log` was not trustworthy at face value
+and required independent hash-level verification - a concrete instance of this project's standing
+"verify, don't just trust the self-report" rule, not a failure of the isolation mechanism itself.
+
+**On-device verification** (the item `WAKEUP.md` flagged as required before considering a merge):
+booted the emulator on this branch, navigated Pokedex -> Charizard -> "View in 3D" - the real
+bundled model rendered and was interactive (rotate/pinch-zoom), a genuine step up from the
+previous pass's public-domain test duck. The model appeared untextured (a flat tan color rather
+than Charizard's actual orange/cream/blue coloring) - a data-quality characteristic of the source
+repo's "optimized" (`opt/`) model variants, not a defect in this app's rendering pipeline; the
+mechanism itself (HybridWebView virtual host -> model-viewer -> WebGL, `DefaultFile` pointed at a
+real per-species `model_{id}.html`) is what was being verified here and worked correctly. Also
+re-confirmed the 2D-sprite fallback path against Unfezant (#521, one of the 44 missing IDs) - shows
+the correct "No 3D model is bundled..." message, no Chromium error page, exactly as designed.
+
+### Still not done / open questions for a future pass
+
+- **Texture quality**: the fetched models render but appear to lack their real in-game coloring/
+  textures for at least Charizard - worth investigating whether the source repo has a non-`opt/`
+  (un-optimized) model variant with textures intact, or whether this is inherent to how that repo
+  processes its assets, before spending more effort here.
+- **44 missing species** (gender-variant IDs like `521-F`) are not represented at all - falls back
+  to the 2D sprite, which is correct behavior, but a future pass could special-case fetching the
+  `-F`/`-M` variant and aliasing it to the base numeric ID if that's judged worthwhile.
+- **Not yet decided: merge to `master`.** The on-device blocker from the prior pass (no real model
+  ever tested) is now closed. Remaining before merging: confirm app size/APK impact of +213.9MB of
+  bundled assets is acceptable (this was always going to be a large experimental branch by nature,
+  but the actual number is now known and worth a deliberate go/no-go rather than a default merge).
+  Per-form (Mega/regional) model lookup is still not implemented - out of scope for this pass.
