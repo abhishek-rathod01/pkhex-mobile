@@ -38,6 +38,9 @@ public partial class PokemonDetailPage : ContentPage
     // from IV_ATK vs. the gender-ratio threshold (GBPKM.cs:106-119) and Gen3 from PID vs. the same
     // threshold (G3PKM.cs:37) - both hard no-op setters, same treatment as the four fields above.
     bool genderEditable;
+    // Pokerus is real from Gen2 on (one packed byte, upper nibble strain / lower nibble days -
+    // PK2.cs:83-84). Gen1 is a hard no-op (PK1.cs:149-150) - RBY has no Pokerus mechanic at all.
+    bool pokerusEditable;
 
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
@@ -112,6 +115,11 @@ public partial class PokemonDetailPage : ContentPage
         BallPicker.SelectedIndexChanged += (_, _) => MarkDirty();
         FriendshipEntry.TextChanged += (_, _) => { ClampEntryToMax(FriendshipEntry, 255); MarkDirty(); };
         GenderPicker.SelectedIndexChanged += (_, _) => MarkDirty();
+        // Structural hardware range (one nibble each, 0-15) - same defensive-clamp precedent as
+        // the IV/EV/PP fields, not a legality cap (the 0-8 "really obtainable" strain subset is
+        // the read-only LegalityAnalysis badge's job to flag, not a picker guard's).
+        PokerusStrainEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusStrainEntry, 15); MarkDirty(); };
+        PokerusDaysEntry.TextChanged += (_, _) => { ClampEntryToMax(PokerusDaysEntry, 15); MarkDirty(); };
         // PP is stored as a single byte in every generation (e.g. PK9.cs:340 `Data[0x7A] = (byte)value`),
         // so 0-255 is the real hard ceiling everywhere - clamped live like the IV/EV fields, same
         // defensive-backstop precedent. PP Ups' real ceiling is 3 (the "PP Up" item's max stack
@@ -316,6 +324,7 @@ public partial class PokemonDetailPage : ContentPage
         PopulateBallPicker(p);
         PopulateFriendship(p);
         PopulateGenderPicker(p);
+        PopulatePokerus(p);
         PopulatePpFields(p);
         RefreshComputed(p);
         RefreshLegality(p);
@@ -471,6 +480,27 @@ public partial class PokemonDetailPage : ContentPage
             : "Gender (derived from IVs/PID before Gen 4, not directly editable - see PROGRESS.md)";
         GenderPicker.Title = "Select gender";
         GenderPicker.SelectedIndex = p.Gender switch { 0 => 0, 1 => 1, _ => 2 };
+    }
+
+    // Pokerus: real, independently-stored, working setter from Gen2 on - one packed byte, upper
+    // nibble strain / lower nibble days, identical layout confirmed across PK2/PK3/PK9 in
+    // verify/PokerusEdit. Gen1 is a hard no-op (PK1.cs:149-150, get => 0; set { } - RBY has no
+    // Pokerus mechanic at all), disabled there with the reason inline, same precedent as the
+    // fields above. No SPLIT beyond that single Gen1 gate - PA8/PK9/PA9 never naturally produce a
+    // nonzero value in the real games (Editing/Pokerus.cs's IsObtainable), but the storage itself
+    // is real there too, so this is left editable and applied-as-is (the read-only legality badge
+    // is what reports an implausible value, not a picker guard) - consistent with how Nature/
+    // Gender/Ability already work on this page.
+    private void PopulatePokerus(PKM p)
+    {
+        pokerusEditable = p.Generation >= 2;
+        PokerusStrainEntry.IsEnabled = pokerusEditable;
+        PokerusDaysEntry.IsEnabled = pokerusEditable;
+        PokerusStrainEntry.Text = p.PokerusStrain.ToString();
+        PokerusDaysEntry.Text = p.PokerusDays.ToString();
+        PokerusCaptionLabel.Text = pokerusEditable
+            ? "Pokerus"
+            : "Pokerus (not stored in Gen 1 - see PROGRESS.md)";
     }
 
     // PP / PP Ups: pk.MoveN_PP / pk.MoveN_PPUps, uniform abstract members with no per-generation
@@ -1060,6 +1090,19 @@ public partial class PokemonDetailPage : ContentPage
             newGender = (byte)GenderPicker.SelectedIndex;
         }
 
+        int newPokerusStrain = pk.PokerusStrain;
+        int newPokerusDays = pk.PokerusDays;
+        if (pokerusEditable)
+        {
+            if (!TryParseStat(PokerusStrainEntry.Text, 15, out newPokerusStrain) || !TryParseStat(PokerusDaysEntry.Text, 15, out newPokerusDays))
+            {
+                // Defensive clamp backstop: the live TextChanged handlers already prevent typing
+                // past 15 (one nibble each, the real hardware range).
+                SaveStatusLabel.Text = "Pokerus Strain and Days must each be 0-15.";
+                return;
+            }
+        }
+
         // PP/PP-Ups are uniform across every generation (no editable-gate needed, unlike the fields
         // above) - resolved and validated the same way regardless of format.
         if (!TryParseStat(Move1PpEntry.Text, 255, out var move1Pp) || !TryParseStat(Move1PpUpsEntry.Text, 3, out var move1PpUps) ||
@@ -1151,6 +1194,13 @@ public partial class PokemonDetailPage : ContentPage
             // statsAffected exclusion as Ability/Ball/Friendship above.
             if (genderEditable)
                 pk.Gender = newGender;
+            // Pokerus is a battle-mechanic counter (EV-gain multiplier/infectiousness), not a
+            // computed stat - same statsAffected exclusion as Ball/Friendship/Gender above.
+            if (pokerusEditable)
+            {
+                pk.PokerusStrain = newPokerusStrain;
+                pk.PokerusDays = newPokerusDays;
+            }
 
             // PP/PP-Ups applied AFTER SetMoves (which already ran above and auto-maxed PP for the
             // new move IDs) so these explicit values are what actually stick, not the auto-max.
@@ -1213,6 +1263,7 @@ public partial class PokemonDetailPage : ContentPage
                 SaveStatusLabel.Text = $"Saved to: {result.FilePath}{note}";
                 RefreshHero(pk);
                 PopulateHeldItem(pk);
+                PopulatePokerus(pk);
                 PopulatePpFields(pk);
                 RefreshComputed(pk);
                 RefreshLegality(pk);

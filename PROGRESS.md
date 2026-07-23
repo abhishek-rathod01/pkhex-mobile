@@ -2001,3 +2001,29 @@ mon's own IVs, for all 5 tested generations (1/2/3/5/9) - not just that a string
 
 Verified on-device against `gen9_real.sav`'s Dondozo: "It's alert to sounds!" rendered correctly
 under Hidden Power in the Computed card, no layout issues.
+
+## Pokerus editing, `PokemonDetailPage`'s Main card (2026-07-23, `master`)
+
+Closes `CAPABILITY-GAPS.md` Tier B's Pokerus item - `pk.PokerusStrain`/`pk.PokerusDays`, one
+packed byte (upper nibble strain, lower nibble days), identical layout confirmed across
+`PK2.cs:83-84`/`PK3.cs:129-130`/`PK9.cs:152-153` in `verify/PokerusEdit`. **Gen1 is a hard no-op**
+(`PK1.cs:149-150`, `get => 0; set { }` - RBY has no Pokerus mechanic at all), disabled there with
+the reason inline, same precedent as Ball/Friendship/Gender above it on the same card.
+
+**Deliberately not further SPLIT beyond the single Gen1 gate**, despite `Editing/Pokerus.cs`'s own
+`IsObtainable` reporting the true in-game mechanic as absent from PB7 (Let's Go), PK9 (Scarlet/
+Violet), and PA9 (Legends Z-A) - none of those games' wild encounters/breeding ever produce a
+nonzero value, and HOME doesn't transfer it in. The storage bytes are nonetheless real and
+independently read/written even on PK9 (confirmed in the harness) - this is a plausibility fact
+for the read-only `LegalityAnalysis` badge to flag, not a second storage no-op, so it's left
+editable and applied-as-is everywhere Gen2+, consistent with how Nature/Gender/Ability already
+work on this page (apply exactly as chosen; legality is reported, not enforced).
+
+Structural hardware range (0-15 each, one nibble) is the live-clamp ceiling, same defensive-clamp
+precedent as IV/EV/PP - not the smaller "really obtainable" 0-8 strain subset, which is a
+legality-engine concern, not a UI guard.
+
+Verified library-level (`verify/PokerusEdit`, Gen1/2/3/5/9, including round-trip through
+`Write()`+reload and a same-generation byte-layout cross-check) and on-device against
+`gen9_real.sav`'s Skeledirge: Strain 0->3, Days 0->2, both round-tripped through the real
+`FileSaver` write path and confirmed in the exported file.

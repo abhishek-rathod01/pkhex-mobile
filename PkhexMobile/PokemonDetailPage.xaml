@@ -123,6 +123,23 @@
                          read-only legality badge is what reports a mismatch, not a picker guard). -->
                     <Label x:Name="GenderCaptionLabel" Text="Gender" Style="{StaticResource LabelCaptionStyle}" />
                     <Picker x:Name="GenderPicker" Title="Select gender" />
+
+                    <!-- Pokerus: editable Gen2+ via pk.PokerusStrain/PokerusDays (one packed byte -
+                         upper nibble strain, lower nibble days - identical bit layout confirmed
+                         across PK2/PK3/PK9 in verify/PokerusEdit). Gen1 is a hard no-op (PK1.cs:
+                         149-150, get => 0; set { } - RBY has no Pokerus mechanic at all), disabled
+                         there with the reason inline, same precedent as Ball/Friendship above.
+                         Applied as-is everywhere else, including PA8/PK9/PA9 where the real games
+                         never naturally produce a nonzero value (Editing/Pokerus.cs's own
+                         IsObtainable) - same "edits applied exactly as chosen, legality reported
+                         not enforced" stance as Nature/Gender/Ability, not a second no-op gate. -->
+                    <Label x:Name="PokerusCaptionLabel" Text="Pokerus" Style="{StaticResource LabelCaptionStyle}" />
+                    <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6">
+                        <Label Grid.Column="0" Text="Strain" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Entry Grid.Column="1" x:Name="PokerusStrainEntry" Keyboard="Numeric" WidthRequest="52" />
+                        <Label Grid.Column="3" Text="Days" Style="{StaticResource LabelCaptionStyle}" VerticalOptions="Center" />
+                        <Entry Grid.Column="4" x:Name="PokerusDaysEntry" Keyboard="Numeric" WidthRequest="52" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 
