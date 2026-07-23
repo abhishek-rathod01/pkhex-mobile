@@ -42,6 +42,16 @@ public partial class PokemonDetailPage : ContentPage
     // PK2.cs:83-84). Gen1 is a hard no-op (PK1.cs:149-150) - RBY has no Pokerus mechanic at all.
     bool pokerusEditable;
 
+    // Markings: no marking concept exists at all in Gen1/2 (neither interface implemented - not
+    // merely a no-op). None = card disabled/explained; Bool = Gen3 (4 markings)/Gen4-6 (6
+    // markings), on/off, tap toggles; Color = Gen7+ (6 markings), None/Blue/Pink, tap cycles.
+    enum MarkingsMode { None, Bool, Color }
+    MarkingsMode markingsMode;
+    int markingsCount;
+    // Parallel to markingsCount - only the first markingsCount entries are meaningful/visible.
+    readonly bool[] boolMarkings = new bool[6];
+    readonly MarkingColor[] colorMarkings = new MarkingColor[6];
+
     // Dirty/clean Save button tracking (design-notes.md "Save button (dirty/clean)"):
     // disabled while the screen has no unsaved changes, enabled the instant any field is
     // edited, disabled again immediately after a successful save. isLoading suppresses the
@@ -325,6 +335,7 @@ public partial class PokemonDetailPage : ContentPage
         PopulateFriendship(p);
         PopulateGenderPicker(p);
         PopulatePokerus(p);
+        PopulateMarkings(p);
         PopulatePpFields(p);
         RefreshComputed(p);
         RefreshLegality(p);
@@ -501,6 +512,105 @@ public partial class PokemonDetailPage : ContentPage
         PokerusCaptionLabel.Text = pokerusEditable
             ? "Pokerus"
             : "Pokerus (not stored in Gen 1 - see PROGRESS.md)";
+    }
+
+    (Border Chip, Label Glyph)[] MarkingChips => new[]
+    {
+        (MarkingCircleChip, MarkingCircleGlyph), (MarkingTriangleChip, MarkingTriangleGlyph),
+        (MarkingSquareChip, MarkingSquareGlyph), (MarkingHeartChip, MarkingHeartGlyph),
+        (MarkingStarChip, MarkingStarGlyph), (MarkingDiamondChip, MarkingDiamondGlyph),
+    };
+
+    // Markings: the 6 shapes shown under a Pokemon in-game, no legality/battle effect - purely a
+    // player-sorting aid. IAppliedMarkings<bool>/<MarkingColor> from PKM.cs, implemented by G3PKM
+    // (bool, MarkingCount=4)/G4PKM+PK5/PK6 (bool, MarkingCount=6)/PK7+ (MarkingColor,
+    // MarkingCount=6) - verified in verify/MarkingsEdit. Gen1/2 implement NEITHER interface at
+    // all - no marking concept exists there, not merely unstored, so the whole card is disabled
+    // with an inline explanation rather than showing dead chips.
+    private void PopulateMarkings(PKM p)
+    {
+        var chips = MarkingChips;
+        if (p is IAppliedMarkings<MarkingColor> colorMarks)
+        {
+            markingsMode = MarkingsMode.Color;
+            markingsCount = colorMarks.MarkingCount;
+            for (int i = 0; i < markingsCount; i++)
+                colorMarkings[i] = colorMarks.GetMarking(i);
+            MarkingsCaptionLabel.Text = "Tap to cycle: none -> blue -> pink";
+        }
+        else if (p is IAppliedMarkings<bool> boolMarks)
+        {
+            markingsMode = MarkingsMode.Bool;
+            markingsCount = boolMarks.MarkingCount;
+            for (int i = 0; i < markingsCount; i++)
+                boolMarkings[i] = boolMarks.GetMarking(i);
+            MarkingsCaptionLabel.Text = markingsCount < 6
+                ? "Tap to toggle (Star/Diamond not available before Gen 4)"
+                : "Tap to toggle";
+        }
+        else
+        {
+            markingsMode = MarkingsMode.None;
+            markingsCount = 0;
+            MarkingsCaptionLabel.Text = "Markings (no marking slots exist before Gen 3 - see PROGRESS.md)";
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            bool available = i < markingsCount;
+            chips[i].Chip.IsEnabled = available;
+            chips[i].Chip.Opacity = available ? 1.0 : 0.35;
+            RefreshMarkingChipVisual(i);
+        }
+    }
+
+    private void RefreshMarkingChipVisual(int index)
+    {
+        var chips = MarkingChips;
+        var (chip, glyph) = chips[index];
+        var resources = Application.Current?.Resources;
+        if (resources is null || index >= markingsCount)
+            return;
+
+        string colorKey;
+        string glyphColorKey;
+        if (markingsMode == MarkingsMode.Color)
+        {
+            colorKey = colorMarkings[index] switch
+            {
+                MarkingColor.Blue => "Blue500",
+                MarkingColor.Pink => "TypeFairy",
+                _ => "SurfaceSunken",
+            };
+            glyphColorKey = colorMarkings[index] == MarkingColor.None ? "TextTertiary" : "TextOnAccent";
+        }
+        else
+        {
+            bool on = boolMarkings[index];
+            colorKey = on ? "Slate700" : "SurfaceSunken";
+            glyphColorKey = on ? "TextOnAccent" : "TextTertiary";
+        }
+        chip.BackgroundColor = (Color)resources[colorKey];
+        glyph.TextColor = (Color)resources[glyphColorKey];
+    }
+
+    private void OnMarkingChipTapped(object? sender, TappedEventArgs e)
+    {
+        if (markingsMode == MarkingsMode.None || e.Parameter is not string paramStr || !int.TryParse(paramStr, out int index) || index >= markingsCount)
+            return;
+
+        if (markingsMode == MarkingsMode.Color)
+            colorMarkings[index] = colorMarkings[index] switch
+            {
+                MarkingColor.None => MarkingColor.Blue,
+                MarkingColor.Blue => MarkingColor.Pink,
+                _ => MarkingColor.None,
+            };
+        else
+            boolMarkings[index] = !boolMarkings[index];
+
+        RefreshMarkingChipVisual(index);
+        MarkDirty();
     }
 
     // PP / PP Ups: pk.MoveN_PP / pk.MoveN_PPUps, uniform abstract members with no per-generation
@@ -1201,6 +1311,19 @@ public partial class PokemonDetailPage : ContentPage
                 pk.PokerusStrain = newPokerusStrain;
                 pk.PokerusDays = newPokerusDays;
             }
+            // Markings are cosmetic (player-sorting aid), no stat/legality effect at all - same
+            // statsAffected exclusion as everything else above, but doesn't even need a "changed"
+            // flag since there's no legality-warning note tied to this field.
+            if (markingsMode == MarkingsMode.Color && pk is IAppliedMarkings<MarkingColor> colorMarks)
+            {
+                for (int i = 0; i < markingsCount; i++)
+                    colorMarks.SetMarking(i, colorMarkings[i]);
+            }
+            else if (markingsMode == MarkingsMode.Bool && pk is IAppliedMarkings<bool> boolMarks)
+            {
+                for (int i = 0; i < markingsCount; i++)
+                    boolMarks.SetMarking(i, boolMarkings[i]);
+            }
 
             // PP/PP-Ups applied AFTER SetMoves (which already ran above and auto-maxed PP for the
             // new move IDs) so these explicit values are what actually stick, not the auto-max.
@@ -1264,6 +1387,7 @@ public partial class PokemonDetailPage : ContentPage
                 RefreshHero(pk);
                 PopulateHeldItem(pk);
                 PopulatePokerus(pk);
+                PopulateMarkings(pk);
                 PopulatePpFields(pk);
                 RefreshComputed(pk);
                 RefreshLegality(pk);

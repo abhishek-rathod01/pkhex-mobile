@@ -2027,3 +2027,51 @@ Verified library-level (`verify/PokerusEdit`, Gen1/2/3/5/9, including round-trip
 `Write()`+reload and a same-generation byte-layout cross-check) and on-device against
 `gen9_real.sav`'s Skeledirge: Strain 0->3, Days 0->2, both round-tripped through the real
 `FileSaver` write path and confirmed in the exported file.
+
+## Markings editing, new "Markings" card on `PokemonDetailPage` (2026-07-23, `master`)
+
+Closes `CAPABILITY-GAPS.md` Tier B's Markings item - the 6 small shapes (Circle/Triangle/Square/
+Heart/Star/Diamond) shown under a Pokemon in-game, used purely for player sorting (no
+battle/legality effect). `IAppliedMarkings<bool>`/`IAppliedMarkings<MarkingColor>` from `PKM.cs`,
+verified in `verify/MarkingsEdit` against the exact per-generation SPLIT this feature needs:
+**Gen1/2 implement neither interface at all** (no marking concept exists, confirmed via
+`pk is IAppliedMarkings<T>` returning false, not merely an unstored no-op); **Gen3** implements
+`IAppliedMarkings<bool>` with `MarkingCount=4` (Circle/Triangle/Square/Heart only -
+`G3PKM.cs:42`); **Gen4-6** implement it with `MarkingCount=6` (+ Star/Diamond - `G4PKM.cs:172`);
+**Gen7+** implement `IAppliedMarkings<MarkingColor>` (`None`/`Blue`/`Pink`) with `MarkingCount=6`
+(`PK7.cs:427`). Index order (0-5 = Circle/Triangle/Square/Heart/Star/Diamond) is identical
+wherever a marking exists.
+
+UI: 6 tappable circular chips. Gen3-6 tap toggles on/off; Gen7+ tap cycles
+None -> Blue -> Pink -> None. Chips beyond a generation's real `MarkingCount` are dimmed and
+disabled rather than hidden (same precedent as every other per-generation field on this page);
+Gen1/2 disables the whole card with an inline explanation, since no marking slots exist there at
+all - genuinely nothing to show, not a suppressed no-op.
+
+**Real on-device bug found and fixed, caught only by re-testing after the fact rather than
+trusting the first screenshot**: the Heart chip rendered as a filled red circle on a completely
+fresh, untouched Gen9 save where the Heart marking's real underlying value was `None` - looking
+identical to a genuinely-marked chip. Root cause: **Unicode U+2665 ("BLACK HEART SUIT") has a
+colored-emoji presentation on Android that some system fonts render in a fixed red, ignoring the
+`Label.TextColor` the app actually set** - unlike Circle/Triangle/Square/Star/Diamond (●▲■★◆),
+none of which have an emoji presentation and so were never affected. Confirmed via a from-scratch
+re-test (fresh app process, fresh save load, fresh page instance, before any taps) that this
+reproduced identically, ruling out stale in-memory state as the cause, and via a standalone
+harness confirming the underlying `MarkingColor` really was `None` in both the original file and
+a save exported before the fix - i.e. **this was purely a rendering bug, not a data-loss bug**;
+every write/round-trip was correct throughout. Fixed by appending U+FE0E (the "text presentation
+selector") after the heart glyph, forcing the same plain monochrome rendering the other five
+shapes already had. Re-verified on-device: all 6 chips now correctly render as neutral gray when
+unmarked.
+
+Also verified the interactive tap-to-cycle behavior on-device (Circle: None -> Blue -> Pink) and
+a full save round-trip (`gen9_real.sav`'s Skeledirge, Circle set to Pink, confirmed in the
+exported file via a standalone check that also reconfirmed Heart correctly stayed `None`
+throughout - proving the fix didn't regress the write path).
+
+**Also fixed in this pass**: two `CS0419` "ambiguous cref" compiler warnings this session had
+introduced earlier (in `PokedexService.cs`'s and `PokemonSlotMover.cs`'s XML doc comments,
+referencing overloaded PKHeX.Core methods without disambiguating parameter types) - this
+project's own bar is 0 warnings, and these had crept in past the pre-existing 7. Fixed by adding
+explicit parameter-type lists to the `<see cref>` tags; confirmed the build is back to exactly
+the same 7 pre-existing `CS8622` warnings as before this session.

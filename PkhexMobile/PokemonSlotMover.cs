@@ -55,7 +55,7 @@ public readonly record struct SlotLocation
 ///   a same-save relocation should not re-trigger "as if traded" handler conditioning,
 ///   Pokedex updates, or record-acquired bookkeeping (the mon isn't newly caught or traded).
 /// - Any box slot involved (source or destination) is checked against
-///   <see cref="SaveFile.IsBoxSlotOverwriteProtected"/> before any write happens - a locked slot
+///   <see cref="SaveFile.IsBoxSlotOverwriteProtected(int, int)"/> before any write happens - a locked slot
 ///   (battle-team, GO transporter, or similar per-game reservation) throws instead of being
 ///   silently overwritten or vacated. <see cref="BoxManagement"/>'s bulk sort/clear operations
 ///   already guard the equivalent case with <see cref="SaveFile.IsAnySlotLockedInBox"/>; this
@@ -151,7 +151,7 @@ public static class PokemonSlotMover
 
     /// <summary>
     /// Throws if <paramref name="loc"/> is a box slot the game has reserved (battle team, GO
-    /// transporter, etc.) - see <see cref="SaveFile.IsBoxSlotOverwriteProtected"/>. Party slots have
+    /// transporter, etc.) - see <see cref="SaveFile.IsBoxSlotOverwriteProtected(int, int)"/>. Party slots have
     /// no equivalent concept in this API and are never checked.
     /// </summary>
     private static void EnsureNotLocked(SaveFile sav, SlotLocation loc)

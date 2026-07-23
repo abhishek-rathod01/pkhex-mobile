@@ -143,6 +143,72 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Markings: the 6 small shapes shown under a Pokemon in the in-game box/party list,
+                 commonly used for personal sorting. Editable Gen3+ (IAppliedMarkings<bool>/
+                 <MarkingColor> - no marking concept exists in Gen1/2 at all, not merely a no-op).
+                 Gen3 has only 4 (Circle/Triangle/Square/Heart - Star/Diamond hidden); Gen4-6 have
+                 all 6 as on/off; Gen7+ have all 6 as a 3-state None/Blue/Pink cycle. One tap
+                 handler per chip cycles through whatever states this generation's format
+                 actually supports - see PokemonDetailPage.xaml.cs OnMarkingChipTapped. -->
+            <Border x:Name="MarkingsCard" Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Markings" Style="{StaticResource SectionTitleStyle}" />
+                    <Label x:Name="MarkingsCaptionLabel" Style="{StaticResource MutedStyle}" />
+                    <HorizontalStackLayout Spacing="10">
+                        <Border x:Name="MarkingCircleChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <Label x:Name="MarkingCircleGlyph" Text="&#9679;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="0" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                        <Border x:Name="MarkingTriangleChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <Label x:Name="MarkingTriangleGlyph" Text="&#9650;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="1" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                        <Border x:Name="MarkingSquareChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <Label x:Name="MarkingSquareGlyph" Text="&#9632;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="2" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                        <Border x:Name="MarkingHeartChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <!-- U+2665 has a colored-emoji presentation on Android that ignores this
+                                 Label's TextColor and renders as a fixed red heart regardless of
+                                 marking state - confirmed on-device (a real bug, not a data issue;
+                                 the underlying MarkingColor was correctly None the whole time).
+                                 U+FE0E (text presentation selector) forces the plain monochrome
+                                 glyph, matching how Circle/Triangle/Square/Star/Diamond already
+                                 render (none of those codepoints have an emoji presentation, so
+                                 they were never affected). -->
+                            <Label x:Name="MarkingHeartGlyph" Text="&#9829;&#65038;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="3" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                        <Border x:Name="MarkingStarChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <Label x:Name="MarkingStarGlyph" Text="&#9733;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="4" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                        <Border x:Name="MarkingDiamondChip" WidthRequest="40" HeightRequest="40" Padding="0" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="{StaticResource RadiusPill}" /></Border.StrokeShape>
+                            <Label x:Name="MarkingDiamondGlyph" Text="&#9670;" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" FontSize="18" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMarkingChipTapped" CommandParameter="5" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Moves -->
             <Border Style="{StaticResource CardBorderStyle}">
                 <VerticalStackLayout Spacing="10">

@@ -270,7 +270,7 @@ public static class PokedexService
     /// entirely from PKHeX.Core's own legality-grade encounter tables (the same data used to
     /// validate save files) - no network dependency, same as the rest of this service.
     ///
-    /// Built on <see cref="EncounterMovesetGenerator.GenerateEncounters"/> (PUBLIC - the same API
+    /// Built on <see cref="EncounterMovesetGenerator.GenerateEncounters(PKM, ReadOnlyMemory{ushort}, GameVersion[])"/> (PUBLIC - the same API
     /// backing PKHeX's own "Encounter Database" tool), called once per <see cref="EncounterContexts"/>
     /// entry against a "rough" blank <see cref="PKM"/> with only Species/Form set, then merged.
     ///
