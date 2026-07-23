@@ -1834,3 +1834,49 @@ the correct "No 3D model is bundled..." message, no Chromium error page, exactly
   bundled assets is acceptable (this was always going to be a large experimental branch by nature,
   but the actual number is now known and worth a deliberate go/no-go rather than a default merge).
   Per-form (Mega/regional) model lookup is still not implemented - out of scope for this pass.
+
+### Texture investigation (2026-07-23, follow-up on user request to "fix the off-colour models")
+
+Confirmed there is **no separate "full-scale"/unoptimized model source to switch to** - checked
+`github.com/Pokemon-3D-api/assets`'s repo root via the GitHub API directly: it contains exactly
+one `models/` directory, and that directory contains only `opt/` - no sibling folder with an
+alternate/higher-fidelity variant exists at the source. A user-facing "optimized vs. full scale"
+toggle isn't buildable against this data source as it currently exists; would need either a
+different upstream source entirely or generating a second variant from the same source assets
+ourselves (out of scope for tonight).
+
+Investigated whether the "off-colour" (flat tan, no real coloring) appearance is a missing-texture
+problem or a rendering-pipeline problem, since those have very different fixes:
+
+- **The `.glb` files do contain real embedded textures** - inspected Charizard's `6.glb` directly
+  (extracted its JSON chunk and parsed it): 5 materials, 5 textures, 5 images, each material with
+  a real `baseColorTexture` reference. This is NOT a case of the source data being genuinely
+  textureless - a real texture-carrying model exists inside the file.
+- The images are stored as **WebP** (`"mimeType":"image/webp"`) and the mesh uses **Draco mesh
+  compression** - both listed in `extensionsRequired`: `["EXT_texture_webp",
+  "KHR_draco_mesh_compression"]`. A glTF/GLB consumer that doesn't support a *required* extension
+  is spec-permitted to fail; a real, working theory for the flat coloring is that the vendored
+  `model-viewer.min.js` (a single offline-bundled file, no CDN) doesn't correctly wire up texture
+  decoding for `EXT_texture_webp` specifically, even though it evidently supports enough of Draco
+  to decode the mesh geometry correctly (the shape rendered perfectly - wings, tail, head all
+  correctly proportioned) and enough of the pipeline to recognize the WebP extension exists.
+  Grepped the vendored file directly for confirmation: it references both `"draco"`/`"Draco"` and
+  `"webp"`/`"WebP"` internally, so this **isn't a case of the strings being entirely absent** -
+  the failure (if that's really what's happening) would be more specific than "unsupported
+  entirely," and I could not narrow it further than that without on-device JS console access.
+- **Root cause NOT conclusively identified.** The app doesn't currently wire up a
+  `WebChromeClient`/`onConsoleMessage`-equivalent listener to capture in-page JS console output
+  from the `HybridWebView`, so there's no way to see what `model-viewer`/three.js actually logs
+  while attempting (and apparently failing) to apply the WebP textures - `adb logcat` alone
+  doesn't surface WebView-internal JS console messages under the tags checked (`chromium`,
+  `webgl`, `webp`, `draco`, `texture` - all came back with nothing more specific than default
+  WebView boilerplate). Diagnosing further needs that console-capture wired in first, which is a
+  real (if small) code change and would need its own on-device verification cycle - not attempted
+  tonight given the user was asleep and this is purely cosmetic (the mechanism itself works; only
+  the visual fidelity is degraded), not a blocker for anything else in this feature.
+
+**Recommendation for a future pass**: add a temporary debug `WebChromeClient` console listener (or
+equivalent MAUI `HybridWebView` hook, if one exists) to `Model3DViewerPage`, reproduce against
+Charizard, and read the actual JS-side error/warning before attempting any fix - guessing at a
+`model-viewer.min.js` version bump without that evidence risks trading one unverified state for
+another.

@@ -32,9 +32,22 @@ verification to resolve, and a process note that the first dispatch attempt
 correctly did nothing because its worktree had branched from `master`
 instead of this branch). **On-device pass with a real model now done**:
 Charizard's real bundled model renders and is interactive; the model
-appears untextured (flat tan, not Charizard's real coloring) - a
-source-data quality issue in the `Pokemon-3D-api/assets` repo's "optimized"
-variant, not a bug in this app's pipeline. 2D-sprite fallback re-confirmed
+appears untextured (flat tan, not Charizard's real coloring). **Update:**
+investigated per explicit user request ("fix the off-colour models, give an
+optimized/full-scale toggle") - confirmed via the GitHub API that
+`Pokemon-3D-api/assets` has only ONE model folder (`opt/`), no separate
+full-scale variant exists to toggle to. Confirmed the `.glb` files DO
+contain real embedded textures (5 materials/textures/images, inspected
+Charizard's `6.glb` JSON chunk directly) stored as WebP + Draco-compressed
+mesh, both listed as `extensionsRequired` - a real, plausible theory is
+that the vendored `model-viewer.min.js` doesn't correctly apply
+`EXT_texture_webp` textures even though it decodes the Draco mesh geometry
+fine (shape renders correctly). **Root cause not conclusively confirmed** -
+needs a JS console listener wired into `HybridWebView` (not present) to see
+the actual in-page error before attempting a fix; logcat alone showed
+nothing WebView-JS-specific. See `PROGRESS.md`'s "Texture investigation"
+section for the full evidence trail and a concrete next step. 2D-sprite
+fallback re-confirmed
 correct for a missing species (#521, one of 44 gaps - gender-variant IDs
 like `521-F` with no plain numeric counterpart in the source repo).
 **Merge to master is still not decided** - the original on-device blocker
