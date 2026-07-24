@@ -2190,3 +2190,79 @@ distinguishing self-inflicted ANR noise from real hangs). The library-level regr
 conclusive on its own: it directly reproduces the exact write path the app uses and demonstrates
 the fix closes it. On-device confirmation should still happen in a future session once the
 emulator is in a clean state.
+
+## Box wallpaper: resolved display name (CAPABILITY-GAPS.md Tier B #15, revisited)
+
+`BoxListPage`'s existing "Wallpaper" row (added in an earlier pass, per `BoxManagement.cs`'s own
+doc comment) already made a deliberate, correct call to ship this **read-only**: `SetBoxWallpaper`
+takes a bare `int` and PKHeX.Core exposes no per-format wallpaper count/max anywhere, so there's no
+generic way to bound-check a write - writing an unbounded index would be its own silent-corruption
+risk. Confirmed that reasoning still holds rather than re-opening it: `GameInfo.Strings
+.wallpapernames` is a fixed 32-entry list (Forest/City/.../Special 16) that only covers the
+Gen3/4-era wallpaper set - real Gen7+/Gen9 saves routinely store indices past 31 (many more in-game
+options were added with no corresponding library string table added alongside them), so there's
+genuinely no complete, trustworthy bounds source to build an editor against. Editing stays
+deferred.
+
+What *was* missing: the display only ever showed the raw index (`#0`), never attempting to resolve
+a name even when the value fell within the known 32-entry list (true for every real save checked -
+Gen3/4/5/9 real saves all had Box 0 at wallpaper index 0). Added `BoxManagement
+.GetBoxWallpaperName(int)`, a simple bounds-checked lookup into `wallpapernames`, and wired it into
+the existing label: `"FOREST (#0)"` when resolvable, unchanged `"#N"` fallback otherwise. Zero risk
+- pure display, no new write path - confirmed against real Gen3 Emerald/Gen4 HGSS/Gen5 Black/Gen9
+Scarlet saves via a standalone check before wiring it in.
+
+## Two more real bugs found by a read-only Haiku audit, both fixed and independently confirmed
+
+Dispatched a read-only, no-commit Haiku subagent to audit `PokemonDetailPage.xaml.cs` for the same
+bug class as the DatePicker fix above (a save silently mutating a field the user never touched).
+It reported two candidates; **both were independently re-verified against real saves before being
+trusted** (this project's own standing rule - a subagent's self-report is a claim, not evidence).
+Both turned out to be real, and more severe than the DatePicker bug: they fire on **every single
+save this app has ever made**, for **every mon**, not just Gen4+ mons with a set date.
+
+**Bug 1 - Nickname/IsNicknamed forced true on every save.** The old code always ran
+`pk.Nickname = NicknameEntry.Text; pk.IsNicknamed = true;` unconditionally. `PKM.Nickname`'s raw
+getter has no fallback logic in the library - but a real non-nicknamed mon's stored nickname bytes
+already equal its species' default display name (that's simply what the cartridge writes at catch
+time). Confirmed directly: every party mon in the `gen9_real.sav` test save, and most of Gen1
+RBY's and Gen3 Emerald's, are `IsNicknamed=false` with `Nickname` exactly equal to
+`SpeciesName.GetSpeciesNameGeneration(...)`. So `NicknameEntry.Text = p.Nickname` at load already
+displays that same default text, and the old unconditional write silently promoted every one of
+those mons to "explicitly nicknamed" on the very next save, regardless of what field was actually
+edited. Fixed by routing through PKHeX.Core's own canonical split -
+`SpeciesName.IsNicknamed(species, text, language, format)` to decide, then `pk.SetNickname(text)`
+or `pk.ClearNickname()` (`CommonEdits.cs`) - the same logic PKHeX Desktop itself uses, evaluated
+against the (possibly new) species so a species change without a matching nickname edit still
+correctly registers as a real custom nickname.
+
+**Bug 2 - CurrentLevel discarding EXP overshoot on every save.** `pk.CurrentLevel = level` also ran
+unconditionally. `PKM.cs:395`'s setter is `EXP = Experience.GetEXP(level, PersonalInfo.EXPGrowth)` -
+it unconditionally snaps EXP to the exact numeric threshold for that level, discarding any real
+"progress toward the next level" EXP overshoot (extremely common for any actively-trained mon below
+level 100 - only the level-100 cap makes overshoot impossible, which is why every real test save's
+level-100 mons initially looked unaffected and nearly hid this bug). Confirmed with a synthetic
+test: constructing a level-50 mon sitting at ~50% progress toward 51, then reassigning
+`CurrentLevel = CurrentLevel` (exactly what an untouched save did), dropped its EXP straight down to
+the exact level-50 floor - real, silent, irreversible progress loss. Fixed by only recomputing EXP
+when species, form, or the level number actually changed; a species/form change still forces the
+recompute even at an unchanged level number, since the same EXP value means a different level under
+a different growth curve (the reason this file's own species-before-level ordering comment already
+existed).
+
+Both fixes verified via a new `verify/NicknameLevelFix` harness: untouched-save preservation across
+Gen1/3/5/9 real saves (including one already-nicknamed mon, to prove the fix doesn't accidentally
+strip a real nickname), a genuine new nickname sticking correctly, clearing a nickname back to
+empty, a species change with stale nickname text correctly registering as a real nickname, an
+explicit level change still recomputing EXP correctly (proving the fix doesn't block legitimate
+level edits), and a species change at an unchanged level number still forcing the necessary
+recompute. All cases pass. Not yet re-confirmed on-device this session (same emulator-instability
+note as the DatePicker fix) - the library-level proof directly replicates the app's exact write
+path, so it's conclusive on its own; an on-device pass should still happen next session.
+
+Given how long these two bugs have likely existed (Nickname/Level editing predates this session
+entirely), any real save previously edited and saved through this app may have had a non-nicknamed
+mon silently marked nicknamed, or lost EXP overshoot on a below-max-level mon. There's no way to
+retroactively detect or repair already-affected files from here - flagging this for awareness, not
+attempting a "scan and fix" pass, since this app has no way to distinguish "genuinely re-nicknamed
+by the user at some point" from "silently flipped by this bug" after the fact.

@@ -419,7 +419,9 @@ public partial class BoxListPage : ContentPage
 
         // --- Wallpaper (read-only by design - see BoxManagement.GetBoxWallpaper) ---
         var wallpaper = BoxManagement.GetBoxWallpaper(sav, currentBox);
-        WallpaperValueLabel.Text = wallpaper is { } w ? $"#{w}" : "Not supported by this save type";
+        WallpaperValueLabel.Text = wallpaper is { } w
+            ? (BoxManagement.GetBoxWallpaperName(w) is { } name ? $"{name} (#{w})" : $"#{w}")
+            : "Not supported by this save type";
         WallpaperNoticeLabel.Text = wallpaper is null
             ? "This game has no per-box wallpapers."
             : "Read-only: PKHeX.Core exposes no valid wallpaper range to check an edit against.";

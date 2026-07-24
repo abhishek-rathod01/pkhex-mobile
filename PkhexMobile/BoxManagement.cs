@@ -122,6 +122,16 @@ public static class BoxManagement
     public static int? GetBoxWallpaper(SaveFile sav, int box)
         => sav is IBoxDetailWallpaper w && (uint)box < sav.BoxCount ? w.GetBoxWallpaper(box) : null;
 
+    /// <summary>Display name for a wallpaper index, or null if it falls outside
+    /// <see cref="GameStrings.wallpapernames"/>.
+    /// <para><c>wallpapernames</c> is a fixed 32-entry list (Forest/City/.../Special 16) that only
+    /// covers the wallpaper set from roughly Gen3/4 - later games (Gen7+ especially) added many
+    /// more in-game options with no corresponding library string table, so a real Gen7+/Gen9
+    /// wallpaper index frequently falls outside this list. That's expected, not a bug - the caller
+    /// falls back to showing the raw numeric index in that case, same as before this existed.</para></summary>
+    public static string? GetBoxWallpaperName(int wallpaper)
+        => (uint)wallpaper < GameInfo.Strings.wallpapernames.Length ? GameInfo.Strings.wallpapernames[wallpaper] : null;
+
     /// <summary>Number of boxes unlocked in-game, or null when the save doesn't track it.
     /// <para>Self-describing probe, no reflection needed: <c>SaveFile.BoxesUnlocked</c> is
     /// <c>virtual { get =&gt; -1; set { } }</c>, so a negative read *is* the library telling you the

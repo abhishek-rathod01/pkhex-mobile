@@ -1480,8 +1480,29 @@ public partial class PokemonDetailPage : ContentPage
 
         try
         {
-            pk.Nickname = NicknameEntry.Text ?? string.Empty;
-            pk.IsNicknamed = true;
+            // Only mark this as an explicit nickname if the text doesn't match newSpecies's OWN
+            // default display name (SpeciesName.GetSpeciesNameGeneration) - mirrors PKHeX.Core's
+            // own SetNickname/ClearNickname split (CommonEdits.cs), not an app-invented rule.
+            // Previously this unconditionally forced pk.IsNicknamed = true on every single save
+            // regardless of whether the text was ever actually customized. For a real
+            // non-nicknamed mon, PKM.Nickname already equals its species' default name (confirmed
+            // against real saves - every Gen9 Scarlet party mon, most Gen1/Gen3 party mons in this
+            // project's test saves) - so NicknameEntry.Text = p.Nickname at load already shows
+            // that same default text, and the old code silently flipped IsNicknamed false->true on
+            // ANY unrelated field edit (an IV, a PP value, a Met Level...), permanently
+            // mis-marking an un-nicknamed mon as explicitly nicknamed. Same bug class as the
+            // DatePicker's untouched-date corruption found earlier this session - a save silently
+            // mutating a flag the user never touched.
+            // Evaluated against newSpecies (the species this mon will actually be after this
+            // save), not the pre-edit species, so changing species without also updating the
+            // nickname text correctly registers as a real custom nickname (matching real
+            // in-game/traded-Pokemon behavior - an old nickname that no longer matches the new
+            // species' default is still a real nickname), not a stale default being misread.
+            var nicknameText = NicknameEntry.Text ?? string.Empty;
+            if (SpeciesName.IsNicknamed(newSpecies, nicknameText, pk.Language, pk.Format))
+                pk.SetNickname(nicknameText);
+            else
+                pk.ClearNickname();
 
             // Species BEFORE level: CurrentLevel is stored as EXP, and EXP<->level depends on the
             // species' growth-rate group. Setting the level first (under the old species' growth
@@ -1492,7 +1513,19 @@ public partial class PokemonDetailPage : ContentPage
             pk.Species = newSpecies;
             if (formEditable)
                 pk.Form = newForm;
-            pk.CurrentLevel = level;
+            // Only recompute EXP when species/form/level actually changed. PKM.cs:395's setter
+            // (EXP = Experience.GetEXP(level, PersonalInfo.EXPGrowth)) unconditionally snaps EXP
+            // to the EXACT threshold for that level, discarding any real overshoot toward the next
+            // level - so writing back the SAME level number every save silently reset every mon's
+            // "progress toward next level" to 0%, confirmed with a synthetic test (a level-50 mon
+            // at ~50% progress toward 51 lost that overshoot down to the exact level-50 floor on
+            // an unconditional same-level reassignment). Same bug class as the Nickname/IsNicknamed
+            // and DatePicker fixes above - a save silently mutating something the user never
+            // touched. Species/Form changes still force the recompute even when the level NUMBER
+            // is unchanged, per the ordering comment above (the same EXP means a different level
+            // under a different growth curve) - that recompute is necessary, not a bug.
+            if (speciesChanged || formChanged || level != pk.CurrentLevel)
+                pk.CurrentLevel = level;
             // SetMoves (not raw Move1..4) so current PP is recomputed for the new moves - setting
             // the move IDs alone would leave stale PP from the previous moves.
             pk.SetMoves(newMoves);

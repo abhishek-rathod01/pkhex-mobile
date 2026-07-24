@@ -11,6 +11,19 @@
    per species - there is no separate full-scale/high-poly source to toggle to. If you want this,
    it would mean sourcing full-scale models from a different pipeline entirely, not a toggle over
    what's already fetched.
+3. **On "it keeps crashing"**: checked the emulator's crash log buffer directly (`adb logcat -d -b
+   crash`). Found exactly ONE crash trace, dated 2026-07-23 (two days before this note), and it's
+   in `Model3DViewerPage`'s `HybridWebView` code on the **`3d-models-experimental` branch** - a
+   `PlatformView cannot be null here` in `HybridWebViewHandler.EvaluateJavaScriptAsync`, a known
+   MAUI race (JS evaluated before the native WebView attaches, or after the page was already torn
+   down). **`master` has no `HybridWebView`/3D-viewer code at all** - confirmed by grepping the
+   working tree - so this specific crash cannot be what's happening if you're testing `master`. No
+   other crash entries exist in the buffer, including nothing from today's session's work. If
+   you're seeing crashes on a real device (not this emulator) or on the 3D-model branch
+   specifically, that's a different investigation than what the logs here can show - I don't have
+   visibility into a device crash unless it also lands in this emulator's log or you can share a
+   repro. In the meantime, two real (but silent, not crash-causing) data-corruption bugs were found
+   and fixed this pass - see the to-do list below.
 
 ## LIVE TO-DO LIST (2026-07-23 overnight session, unattended - user asked this be kept explicit)
 
@@ -82,8 +95,42 @@ pattern already used successfully for Track A this session).
   **Not yet re-confirmed on-device** - the emulator became slow/unresponsive to basic `adb`
   commands partway through this check; a next session should redo the on-device pass once it's in
   a clean state. The library-level fix is conclusive on its own (see PROGRESS.md).
-- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): bag/inventory editing, box wallpaper/
-  current box. Priority order and API citations in `CAPABILITY-GAPS.md` Part 2.
+- [x] **DONE (revisited, correctly stayed read-only)**: Box wallpaper. `BoxListPage` already had a
+  read-only Wallpaper row from an earlier pass, with a well-reasoned decision not to make it
+  editable (PKHeX.Core has no per-format wallpaper count/max anywhere, so a write can't be
+  bound-checked - confirmed this reasoning still holds, did not reopen it). Added the one thing
+  that WAS missing: `BoxManagement.GetBoxWallpaperName` resolves the raw index to a real name
+  ("FOREST (#0)") when it falls within the known 32-entry list, confirmed against real Gen3/4/5/9
+  saves. Box wallpaper editing itself (Tier B #15) is now considered closed - not a gap, a
+  documented library limitation.
+- [x] **DONE (found + fixed TWO real bugs, more severe than the DatePicker one)**: dispatched a
+  read-only, no-commit Haiku subagent to audit `PokemonDetailPage.xaml.cs` for the same bug class.
+  Both findings independently re-verified against real saves before trusting them (per this
+  project's own standing rule about subagent self-reports), and both were real:
+  1. **Nickname/IsNicknamed forced true on every single save, for every mon.** A real
+     non-nicknamed mon's stored `Nickname` already equals its species' default name (confirmed:
+     every party mon in `gen9_real.sav`, most of Gen1 RBY's and Gen3 Emerald's) - so the old
+     unconditional `pk.IsNicknamed = true` silently promoted every one of those mons to
+     "explicitly nicknamed" on the very next save, whatever field was actually edited. Fixed via
+     PKHeX.Core's own `SpeciesName.IsNicknamed`/`SetNickname`/`ClearNickname` split.
+  2. **CurrentLevel discarding EXP overshoot on every single save.** `pk.CurrentLevel = level` ran
+     unconditionally; its setter snaps EXP to the exact level threshold, discarding any real
+     "progress toward next level" (invisible on this project's real test saves because they're all
+     level 100, where overshoot is impossible - confirmed with a synthetic level-50 mon that lost
+     real progress). Fixed by only recomputing EXP when species/form/level actually changed.
+
+  Both affect **every save this app has ever made**, not just Gen4+ mons - more severe than the
+  DatePicker bug. Verified via new `verify/NicknameLevelFix` (untouched-save preservation across
+  Gen1/3/5/9, genuine-nickname/clear-nickname/species-change edge cases, explicit level changes
+  still working correctly) - all pass. Not yet re-confirmed on-device (same emulator-instability
+  note as the DatePicker fix - library-level proof is conclusive on its own). **Any save this app
+  has ever written may already carry silently-flipped IsNicknamed flags or lost EXP overshoot on
+  a below-max-level mon** - there's no way to retroactively detect which files were affected, so
+  this is flagged for awareness only, not a "scan and repair" task.
+- [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): bag/inventory editing (the one sizeable
+  item left - medium-high per CAPABILITY-GAPS.md, item ID space differs per gen but the item-sprite
+  keying work is already solved elsewhere in this app). Priority order and API citations in
+  `CAPABILITY-GAPS.md` Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery
   Gift, the single-generation interface cluster (Hyper Training/Tera type/size-scale/Dynamax/AVs/
   Memories/Super Training/tech records/HOME tracker/Alpha-Noble), QR import/export.
