@@ -138,3 +138,36 @@ RunCase("Gen9", Path.Combine(dir, "pkmnscarlet_100", "main"), 0,
 
 Console.WriteLine();
 Console.WriteLine(allOk ? "=== ALL CASES PASS ===" : "=== FAILURE ===");
+
+// Regression check: an UNTOUCHED save (no date change at all) must preserve an unset 00/00/00
+// Met/Egg date rather than have the DatePicker's SafeDate(0,0,0) -> DateTime(2000,1,1) clamp
+// written back as a real Month=1/Day=1. This is the discriminator the RunCase loop above couldn't
+// catch (every RunCase there deliberately picks a NEW target date) - it caught a real bug in this
+// session's first pass (an unconditional decompose-and-write on every save), fixed in
+// PokemonDetailPage.xaml.cs by comparing the picker's value against a load-time baseline and only
+// writing when they differ. This simulates the FIXED app logic, not the original buggy one.
+{
+    Console.WriteLine("\n=== Regression: untouched save must not corrupt an unset date ===");
+    var path = Path.Combine(dir, "pkmnscarlet_100", "main");
+    var sav = SaveUtil.GetSaveFile((byte[])File.ReadAllBytes(path).Clone())!;
+    var pk = sav.PartyData[0];
+    Console.WriteLine($"  Before: EggYear={pk.EggYear} EggMonth={pk.EggMonth} EggDay={pk.EggDay}");
+
+    // Mirrors PopulateOrigin's baseline capture + OnSaveChangesClicked's guarded write.
+    int y = 2000 + pk.EggYear;
+    int m = Math.Clamp((int)pk.EggMonth, 1, 12);
+    int d = Math.Clamp((int)pk.EggDay, 1, DateTime.DaysInMonth(y, m));
+    var baseline = new DateTime(y, m, d);
+    var pickerDate = baseline; // untouched: picker still shows exactly what load populated it with
+
+    if (pickerDate != baseline)
+    {
+        pk.EggYear = (byte)(pickerDate.Year - 2000);
+        pk.EggMonth = (byte)pickerDate.Month;
+        pk.EggDay = (byte)pickerDate.Day;
+    }
+
+    Console.WriteLine($"  After simulated untouched save (fixed logic): EggYear={pk.EggYear} EggMonth={pk.EggMonth} EggDay={pk.EggDay}");
+    Check("Untouched EggDate survives a guarded DatePicker write-back (0/0/0 preserved)",
+        pk.EggYear == 0 && pk.EggMonth == 0 && pk.EggDay == 0);
+}

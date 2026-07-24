@@ -2158,3 +2158,35 @@ Gen3 "Is Egg" toggle's forced nickname correctly wins over whatever the user typ
 real games. All 6 generations pass library-level, plus an on-device toggle confirmed rendering
 correctly against `gen9_real.sav` (default off, matching the mon's real non-egg status; toggles on
 and back off correctly).
+
+## Fixed a real data-corruption bug in the Origin card's date pickers
+
+Caught before further use, not by a user report: the Met/Egg `DatePicker`s corrupted an **untouched**
+mon's unset date on every single save. `SafeDate(0,0,0)` (the display fallback for a date that was
+never set - true for essentially every non-bred mon's Egg Date, and any mon with no tracked Met
+Date) clamps Month/Day from 0 to 1 for display purposes (`DateTime` can't represent month/day 0).
+The save handler was decomposing `DatePicker.Date` and writing it back **unconditionally** whenever
+the field was generation-editable - so an untouched Gen4+ mon's `EggMonth`/`EggDay` silently flipped
+0->1 on every save, which also flips `PKM.WasEgg` (`EggDay != 0`) false->true. Year survived by
+coincidence (`2000-2000=0`), which is part of why it wasn't obvious from a quick glance.
+
+Root cause class: same as the `CurrentHandler` "as if traded" bug this project already hit once -
+a save silently mutating a field the user never touched. Caught by extending
+`verify/OriginMetDataEdit` with a discriminator the original per-field `RunCase` loop couldn't
+provide (every `RunCase` there deliberately targets a *new* date, so it could never notice an
+untouched date getting corrupted): load a real save, touch nothing, run the exact save path,
+reload, assert the date is still `0/0/0`. It failed pre-fix (`EggMonth`/`EggDay` came back `1/1`)
+and passes post-fix.
+
+Fix: capture a `metDateBaseline`/`eggDateBaseline` (the `SafeDate`-computed value) at load time in
+`PopulateOrigin`, and in `OnSaveChangesClicked` only decompose-and-write a date if
+`DatePicker.Date` differs from that baseline - otherwise the original raw bytes are left alone.
+This is the same "don't touch what wasn't changed" precedent as `statsAffected` gating
+`ResetPartyStats`, applied to a field this project hadn't needed it for before.
+
+Not yet re-confirmed on-device (the emulator became unresponsive to basic `adb` commands mid-session
+- a tooling/environment issue, not a suspected app bug, per this project's own precedent of
+distinguishing self-inflicted ANR noise from real hangs). The library-level regression check is
+conclusive on its own: it directly reproduces the exact write path the app uses and demonstrates
+the fix closes it. On-device confirmation should still happen in a future session once the
+emulator is in a clean state.

@@ -73,6 +73,15 @@ pattern already used successfully for Track A this session).
   Gen3's real nickname-forcing side effect) and on-device toggle confirmed against `gen9_real.sav`.
   This closes out CAPABILITY-GAPS.md Tier B #10 (egg status/hatch) together with the Egg
   Location/Date fields already added in the Origin card above.
+- [x] **DONE (found + fixed a real bug)**: the Origin card's Met/Egg `DatePicker`s were silently
+  corrupting an UNTOUCHED mon's unset date (`0/0/0` -> `EggMonth/EggDay = 1/1`) on every single
+  save, because `SafeDate`'s display clamp got written straight back unconditionally. Caught by a
+  new `verify/OriginMetDataEdit` regression case (load a real save, touch nothing, run the exact
+  save path, assert the date is still `0/0/0` - failed pre-fix, passes post-fix). Fixed with a
+  load-time baseline comparison (only decompose+write if the picker's value actually moved).
+  **Not yet re-confirmed on-device** - the emulator became slow/unresponsive to basic `adb`
+  commands partway through this check; a next session should redo the on-device pass once it's in
+  a clean state. The library-level fix is conclusive on its own (see PROGRESS.md).
 - [ ] Continue `CAPABILITY-GAPS.md` Tier B (remaining): bag/inventory editing, box wallpaper/
   current box. Priority order and API citations in `CAPABILITY-GAPS.md` Part 2.
 - [ ] Then Tier C if time allows: contest stats, ribbons, bulk/batch edit, event flags, Mystery

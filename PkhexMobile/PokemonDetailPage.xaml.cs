@@ -60,6 +60,13 @@ public partial class PokemonDetailPage : ContentPage
     // nickname to the hardcoded Japanese egg name and language to Japanese (G3PKM.cs - real Gen3
     // hardware behavior, every Gen3 egg displays that regardless of game language).
     bool isEggEditable;
+    // Baseline dates captured at load (SafeDate of whatever was actually stored, INCLUDING an
+    // unset 00/00/00). DatePicker.Date can't represent 00/00/00 (Month/Day clamp to 1), so
+    // comparing the picker's current value against this baseline - rather than always decomposing
+    // and writing it back - is what stops an untouched unset date from being corrupted to
+    // Month=1/Day=1 on every single save. See OnSaveChangesClicked.
+    DateTime metDateBaseline;
+    DateTime eggDateBaseline;
     // Picker index -> real value maps, rebuilt per Pokemon (location lists depend on both the
     // mon's own Version and format Context - see GameInfo.GetLocationList).
     readonly List<GameVersion> versionValues = new();
@@ -625,7 +632,8 @@ public partial class PokemonDetailPage : ContentPage
             ? "Met Level"
             : "Met Level (not stored in Gen 1 - see PROGRESS.md)";
 
-        MetDatePicker.Date = SafeDate(p.MetYear, p.MetMonth, p.MetDay);
+        metDateBaseline = SafeDate(p.MetYear, p.MetMonth, p.MetDay);
+        MetDatePicker.Date = metDateBaseline;
         MetDatePicker.IsEnabled = metDateEditable;
         MetDateCaptionLabel.Text = metDateEditable
             ? "Met Date"
@@ -650,7 +658,8 @@ public partial class PokemonDetailPage : ContentPage
             ? "Egg Location"
             : "Egg Location (not stored before Gen 4 - see PROGRESS.md)";
 
-        EggDatePicker.Date = SafeDate(p.EggYear, p.EggMonth, p.EggDay);
+        eggDateBaseline = SafeDate(p.EggYear, p.EggMonth, p.EggDay);
+        EggDatePicker.Date = eggDateBaseline;
         EggDatePicker.IsEnabled = eggEditable;
         EggDateCaptionLabel.Text = eggEditable
             ? "Egg Date"
@@ -1395,13 +1404,19 @@ public partial class PokemonDetailPage : ContentPage
         if (metDateEditable)
         {
             // MinimumDate/MaximumDate are set in the constructor and PopulateOrigin always
-            // assigns a concrete Date, so this is never actually null in practice - .Value keeps
-            // the write path's arithmetic on a plain DateTime rather than threading nullability
-            // through every field below.
+            // assigns a concrete Date, so this is never actually null in practice.
             var d = MetDatePicker.Date ?? DateTime.Today;
-            newMetYear = (byte)(d.Year - 2000);
-            newMetMonth = (byte)d.Month;
-            newMetDay = (byte)d.Day;
+            // Only decompose+write if the picker's value actually moved off the baseline computed
+            // at load. SafeDate can't represent an unset 00/00/00 (Month/Day clamp to 1) - without
+            // this guard, an UNTOUCHED mon with no met date set would get MetMonth/MetDay corrupted
+            // from 0 to 1 on every single save, a real bug caught by
+            // verify/OriginMetDataEdit's untouched-save regression check.
+            if (d != metDateBaseline)
+            {
+                newMetYear = (byte)(d.Year - 2000);
+                newMetMonth = (byte)d.Month;
+                newMetDay = (byte)d.Day;
+            }
         }
 
         ushort newEggLocation = pk.EggLocation;
@@ -1415,9 +1430,13 @@ public partial class PokemonDetailPage : ContentPage
             }
             newEggLocation = eggLocationValues[EggLocationPicker.SelectedIndex];
             var ed = EggDatePicker.Date ?? DateTime.Today;
-            newEggYear = (byte)(ed.Year - 2000);
-            newEggMonth = (byte)ed.Month;
-            newEggDay = (byte)ed.Day;
+            // Same untouched-date guard as Met Date above.
+            if (ed != eggDateBaseline)
+            {
+                newEggYear = (byte)(ed.Year - 2000);
+                newEggMonth = (byte)ed.Month;
+                newEggDay = (byte)ed.Day;
+            }
         }
 
         // PP/PP-Ups are uniform across every generation (no editable-gate needed, unlike the fields
