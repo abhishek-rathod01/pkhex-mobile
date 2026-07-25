@@ -5,6 +5,14 @@
 (2) a priority-ordered map of PKHeX.Core capability the app still does not expose — including
 gaps the existing `CAPABILITY-AUDIT.md` missed or under-scoped.
 
+> **2026-07-25 status update**: everything in Tier A, and everything in Tier B *except* #11
+> (bag/inventory editing), has since shipped — see `PROGRESS.md`/`WAKEUP.md` for write-ups.
+> This file's own §1.1 warned about exactly this kind of staleness happening to
+> `CAPABILITY-AUDIT.md`; same thing happened here. Items are marked `[SHIPPED]` inline below
+> rather than deleted, so the priority reasoning stays visible. **#11 (bag/inventory) is the
+> only real remaining item from this file's original scope** — Tier C is still fully open but
+> was always explicitly low-priority/niche/large by design, not an oversight.
+
 Method: the app's real surface was extracted by grepping every `PkhexMobile/*.cs` for `pk.`/
 `sav.` member accesses (not inferred from prose), then cross-referenced against `vendor/`.
 Sprite/item counts were taken by counting files on disk, not re-quoting prose.
@@ -103,68 +111,72 @@ the disable-control-but-show-true-value + inline-reason pattern on generations t
 
 ### Tier A — high value, low effort
 
-**1. Friendship editing** *(audit #6, still open)*
+**1. Friendship editing** *(audit #6)* — **[SHIPPED]** Ball + Friendship editing, `PokemonDetailPage`.
 - API: `pk.CurrentFriendship` (0-255), `pk.OriginalTrainerFriendship`, one-tap `pk.MaximizeFriendship()` (`CommonEdits.cs:398`).
 - Write. **SPLIT:** Gen1 no-op (`PK1.cs:155`); Gen2 real (`PK2.cs:81`); Gen3 aliases both properties (`G3PKM.cs:39`) so show one field pre-Gen6. Gen4+ two independent fields.
 - Size: **small.** Bolts onto the detail page. Applied-as-is (rarely legality-flagged, but keep the banner).
 
-**2. Ball editing** *(audit #7, still open)*
+**2. Ball editing** *(audit #7)* — **[SHIPPED]** same commit as Friendship above.
 - API: `pk.Ball`, bounded by `pk.MaxBallID`. Use `pk.Ball` directly — `G4PKM.cs:275` already hides the DPPt/HGSS two-byte split.
 - Write. **SPLIT:** Gen1/2 no-op (`GBPKM.cs:135`); Gen3+ real.
 - Size: **small.** Applied-as-is.
 
-**3. Pokémon-level Gender editing** *(audit UNDER-SCOPED — §5.2 trap only)*
+**3. Pokémon-level Gender editing** *(audit UNDER-SCOPED — §5.2 trap only)* — **[SHIPPED]**
 - API: `pk.Gender` (real settable byte from Gen4: `PK4.cs:170`, `PK5.cs:192`).
 - Write. **SPLIT:** Gen1/2 derived from IVs (`GBPKM.cs:106-123`), Gen3 PID no-op (`G3PKM.cs:37`), Gen4+ real — identical shape to the already-shipped Nature/Ability pickers.
 - Size: **small–medium.** Applied-as-is (a gender that contradicts the species gender ratio / PID will be flagged by the legality badge, which is the intended behavior).
 
-**4. Manual PP / PP-Ups editing** *(audit #11, still open)*
+**4. Manual PP / PP-Ups editing** *(audit #11)* — **[SHIPPED]**
 - API: `pk.Move1_PP…Move4_PP`, `pk.Move1_PPUps…` (abstract `PKM.cs:133-140`). The app only calls `SetMoves` (auto-max PP) today; this exposes manual control.
 - Write. **UNIFORM.** Size: **small**, attaches to the existing Moves card. Applied-as-is.
 
-**5. Computed final stats display** *(NOT in audit — new)*
+**5. Computed final stats display** *(NOT in audit — new)* — **[SHIPPED]** "Computed" card.
 - API: `pk.Stat_HPMax`/`Stat_ATK`/`Stat_DEF`/`Stat_SPA`/`Stat_SPD`/`Stat_SPE` (abstract `PKM.cs:155-`), populated by `ResetPartyStats()` for party mons; compute via `PersonalInfo` for box mons.
 - **Read-only-safe.** Size: **small.** Value: the app currently shows the *inputs* (IV/EV/level/nature) but never the resulting battle numbers those produce — a natural, safe read-only card.
 
-**6. Species type chip(s) display** *(NOT in audit — new)*
+**6. Species type chip(s) display** *(NOT in audit — new)* — **[SHIPPED]**
 - API: `IPersonalType.Type1`/`Type2` (`PersonalInfo/Interfaces/IPersonalType.cs:11,16`) on the mon's `PersonalInfo`. Reuse the existing type-badge component already built for the move-type chips (`3b75c12`/`795a1d5`).
 - **Read-only-safe.** Size: **small** (component already exists).
 
-**7. Hidden Power type / power readout** *(NOT in audit — new)*
+**7. Hidden Power type / power readout** *(NOT in audit — new)* — **[SHIPPED]**
 - API: `HiddenPower.GetType(IVs, ctx)` / `GetPower` (`Editing/HiddenPower.cs:16`). Derived from IVs; relevant Gen2-7. `HiddenPowerApplicator` exists if editing is later wanted (pre-Gen8 only).
 - **Read-only-safe** as a display. Size: **small.**
 
-**8. Locked-slot guard in `PokemonSlotMover.MoveOrSwap`** *(audit §4.2, still open)*
+**8. Locked-slot guard in `PokemonSlotMover.MoveOrSwap`** *(audit §4.2)* — **[SHIPPED]**
 - API: `sav.IsBoxSlotLocked` / `GetBoxSlotFlags` / `IsBoxSlotOverwriteProtected` (`SaveFile.cs:483-488`).
 - Write-path **hardening**, not a user feature. Size: **small** (one guard). Prevents overwriting battle-box/daycare/in-transit slots on later gens. `BoxManagement`'s bulk ops already do this; the move path does not.
 
 ### Tier B — medium value / effort
 
-**9. Origin / met data** *(audit #14)*
+**9. Origin / met data** *(audit #14)* — **[SHIPPED]** "Origin" card, `PokemonDetailPage`.
 - API: `pk.Version`, `MetLocation`, `MetLevel`, `MetYear/Month/Day`, `EggLocation`.
 - Read + write. **SPLIT:** met dates are `virtual { get => 0; set { } }` pre-Gen4 (`PKM.cs:185-187`), real Gen4+. Size: **medium.** Applied-as-is (heavily legality-coupled).
 
-**10. Egg status / hatch** *(audit #15)*
+**10. Egg status / hatch** *(audit #15)* — **[SHIPPED]** Is Egg toggle + Egg Location/Date in the Origin card.
 - API: `pk.IsEgg` (currently only *read* in `BoxManagement.cs:298`'s backup snapshot), `ForceHatchPKM`, `SetEggMetData`.
 - Write. **SPLIT:** no eggs in Gen1. Size: **medium.**
 
-**11. Bag / inventory editing** *(audit #17)*
+**11. Bag / inventory editing** *(audit #17)* — **STILL OPEN, the one real remaining item.**
 - API: `sav.Inventory` → `PlayerBag.Pouches` → `InventoryPouch`, `CopyTo(sav)`.
 - Read + write. Base returns `EmptyPlayerBag` (graceful). Size: **medium–high.** Mostly uniform; item ID spaces differ per gen (reuse the item-sprite keying already solved).
 
-**12. Markings** *(audit #18)*
+**12. Markings** *(audit #18)* — **[SHIPPED]** "Markings" card, `PokemonDetailPage`.
 - API: `IAppliedMarkings<bool>` / `<MarkingColor>`, `ToggleMarking`.
 - Read + write. **SPLIT:** generic param differs Gen3-6 (bool) vs Gen7+ (color); none in Gen1/2. Size: **medium.** Cosmetic, low legality risk.
 
-**13. Pokérus** *(audit #22)*
+**13. Pokérus** *(audit #22)* — **[SHIPPED]** Main card, `PokemonDetailPage`.
 - API: `pk.PokerusStrain`, `PokerusDays`, `Editing/Pokerus.cs`.
 - Write. **SPLIT:** absent Gen1. Size: **small–medium.**
 
-**14. Characteristic string** *(NOT in audit — new, trivial)*
+**14. Characteristic string** *(NOT in audit — new, trivial)* — **[SHIPPED]** Computed card.
 - API: `EntityCharacteristic.GetCharacteristic(maxStatIndex, maxStatValue)` (`PKM/Util/EntityCharacteristic.cs:16`) → the "Takes plenty of siestas"-style flavor line, derived from IVs/EC. Gen3+.
 - **Read-only-safe.** Size: **tiny.** Nice pairing with the stats card (§5).
 
-**15. Box wallpaper / current box** *(audit #20)*
+**15. Box wallpaper / current box** *(audit #20)* — **[PARTIALLY SHIPPED, rest is a deliberate
+non-goal, not an open gap]** Wallpaper *name resolution* shipped (`BoxManagement.
+GetBoxWallpaperName`, resolves the raw index to a real name when within the known 32-entry list).
+Wallpaper *editing* stays read-only by a considered decision, re-confirmed twice: PKHeX.Core has
+no per-format wallpaper count/max anywhere, so a write can't be bounds-checked safely.
 - API: `IBoxDetailWallpaper`, `sav.CurrentBox` (currently *read* only), `BoxesUnlocked` (read).
 - Write. **SPLIT:** interface check. Size: **small–medium.** Cosmetic.
 
