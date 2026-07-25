@@ -2,28 +2,88 @@
 
 ## DECISIONS ONLY YOU CAN MAKE (flagged, not acted on)
 
-1. **Merge `3d-models-experimental` -> `master`?** It adds +214MB of Nintendo-derived `.glb`
-   model assets (933/974 species), already pushed to the public remote on its own branch. The
-   mechanism is verified working on-device. Left unmerged deliberately - size + third-party-asset
-   licensing on a public repo is a call only you should make, not a default I should take.
+1. **Merge `3d-models-experimental` -> `master`?** Recommend AGAINST merging the assets in as-is
+   (+214MB `.glb` bundle). See item 4 below - fetch-on-demand + disk cache is the better shape for
+   this, and would mean the branch's *code* merges but not its *asset files*. Still your call.
 2. **The "optimised vs full-scale model" toggle you asked for is not buildable as scoped.**
    Checked the upstream asset source directly: it only publishes one (already-optimized) variant
    per species - there is no separate full-scale/high-poly source to toggle to. If you want this,
    it would mean sourcing full-scale models from a different pipeline entirely, not a toggle over
    what's already fetched.
-3. **On "it keeps crashing"**: checked the emulator's crash log buffer directly (`adb logcat -d -b
-   crash`). Found exactly ONE crash trace, dated 2026-07-23 (two days before this note), and it's
-   in `Model3DViewerPage`'s `HybridWebView` code on the **`3d-models-experimental` branch** - a
-   `PlatformView cannot be null here` in `HybridWebViewHandler.EvaluateJavaScriptAsync`, a known
-   MAUI race (JS evaluated before the native WebView attaches, or after the page was already torn
-   down). **`master` has no `HybridWebView`/3D-viewer code at all** - confirmed by grepping the
-   working tree - so this specific crash cannot be what's happening if you're testing `master`. No
-   other crash entries exist in the buffer, including nothing from today's session's work. If
-   you're seeing crashes on a real device (not this emulator) or on the 3D-model branch
-   specifically, that's a different investigation than what the logs here can show - I don't have
-   visibility into a device crash unless it also lands in this emulator's log or you can share a
-   repro. In the meantime, two real (but silent, not crash-causing) data-corruption bugs were found
-   and fixed this pass - see the to-do list below.
+3. **On "it keeps crashing" - corrected, previous note was premature.** Two theories were checked
+   and neither holds up as *the* explanation:
+   - `Model3DViewerPage`'s `HybridWebView` crash (`PlatformView cannot be null here`,
+     `HybridWebViewHandler.MapEvaluateJavaScriptAsync`) only exists on `3d-models-experimental`,
+     confirmed by grep - `master` has no `HybridWebView`/3D-viewer code at all. A tentative
+     mitigation is now on that branch (waits for the native WebView to exist before touching
+     `DefaultFile`) but is **not confirmed to fix it** - the exception is rethrown on a posted
+     async continuation, which a synchronous guard narrows but can't provably close, and the
+     original crash (dated 2026-07-23) was never reproduced to test against. See that branch's
+     `PROGRESS.md` for the full writeup.
+   - A ~33-39s cold-start delay was measured on that branch and initially looked like strong
+     evidence the +214MB/1866-file asset bundle was the cause - **but the identical ~33s delay
+     was then measured on `master` too**, which has none of those assets. That refutes the
+     asset-bundle theory outright; the real driver is Debug-build/emulator JIT+verification
+     overhead specific to this x86_64 emulator, present across the whole project, not something
+     trimming assets would fix.
+   - The one crash-adjacent fix that IS real and verified this pass: `RefreshLegality`
+     (`PokemonDetailPage.xaml.cs`) was running full `LegalityAnalysis` encounter-matching
+     synchronously on the UI thread on every page load and save - a genuine ANR risk on real
+     devices with expensive saves, independent of the emulator. Moved to a background thread
+     (`Task.Run`), with a clone-before-backgrounding fix for the resulting data race. This is the
+     most concrete, verified crash/freeze-adjacent fix from this pass - see the to-do list.
+   - **If you're still seeing crashes**, the honest answer is neither of the above two theories
+     explains it, and the emulator's log buffer doesn't show anything else. A repro (which screen,
+     which save file, what action) would let this go further; guessing further without one risks
+     the "unverified 'fix'" pattern flagged in item 4.
+4. **Architecture decision needed: bundle vs. fetch-and-cache for large assets.** Confirmed via a
+   Haiku research pass that `PokeAPI/sprites`' `official-artwork` set (CC0-licensed, full 1-1025
+   coverage including shiny) would add another **~292MB** if bundled - on top of the 3D branch's
+   214MB, that's ~506MB baked into the APK, which isn't viable. Recommend **fetch-on-demand +
+   disk cache** for both the hi-res Pokedex artwork and (if you do want it kept) the 3D models:
+   download on first view, cache under `FileSystem.CacheDirectory`, fall back to the already-
+   bundled small pixel sprite if offline/uncached. This also sidesteps the 3D branch's merge-size
+   concern in item 1. Not started - this is a real architecture choice (offline availability vs.
+   app size vs. requiring network on first view of each Pokemon) that's yours to make before any
+   code gets written against it.
+
+## 2026-07-25 pass: crash re-investigation, 3D branch findings, two Haiku research tasks
+
+- [x] **DONE**: Found and fixed a residual instance of the Nickname/IsNicknamed bug from the
+  previous pass (caught by `advisor` review before it shipped further) - the fix compared nickname
+  text against the species' default name unconditionally, which silently cleared `IsNicknamed` on
+  a mon deliberately nicknamed to match its own species name. Now baseline-gated (species changed,
+  or text differs from what was loaded), matching the DatePicker fix's pattern. Regression case
+  added to `verify/NicknameLevelFix`, passes. Pushed (`2c46ce9`).
+- [x] **DONE**: Moved `RefreshLegality`'s `LegalityAnalysis` construction off the UI thread
+  (`Task.Run`) - it was running full encounter-matching synchronously on every page load/save, a
+  genuine ANR risk on real devices independent of the emulator. Then caught and fixed a
+  cross-thread data race my own fix introduced (was handing the live, mutable `PKM` to the
+  background thread - now clones first). Both pushed (`998bad9`). This is the most concrete,
+  verified crash/freeze-adjacent fix from this pass.
+- [x] **DONE (tentative, not confirmed)**: `Model3DViewerPage` on `3d-models-experimental` now
+  waits for the native WebView to exist before setting `DefaultFile`, narrowing the window for a
+  real `PlatformView cannot be null here` crash found in logcat. NOT confirmed to fix it - see
+  decision item 3 above and that branch's `PROGRESS.md`.
+- [x] **DONE**: Investigated and **refuted** the "3D branch's asset bundle causes a slow/ANR'ing
+  cold start" theory - `master` (no 3D assets) showed the identical ~33s cold-start delay under
+  the same conditions. See decision item 3 above.
+- **Researched, not built** (Haiku, read-only, independently sanity-checked): Pokedex hi-res
+  artwork sourcing. `PokeAPI/sprites`'s `official-artwork` set is CC0-licensed, confirmed full
+  1-1025 coverage including shiny (~150KB avg/image, ~292MB total for the full normal+shiny set).
+  Does NOT cover Mega/regional/alternate forms - those would fall back to base-species art or need
+  separate sourcing. Deferred pending the bundle-vs-fetch decision (item 4 above) - building this
+  as a straight asset bundle would be the wrong call before that's settled.
+- **Researched, not built** (Haiku, read-only): Mega Evolution integration into the Pokedex
+  evolution-chain display. PKHeX.Core models Megas as a `Form` value on the same species (not a
+  separate evolution node) - `ItemStorage9ZA.GetExpectedMegaStoneOrPrimalOrb(species, form)` gives
+  the species->Mega-form->required-item mapping, already used elsewhere in this app's Pokedex
+  "Forms" card. Scoped as **medium effort**: the evolution-chain walk (`PokedexService.cs`, built
+  on `EvolutionTree.Evolves9`) would need Mega nodes manually grafted in and marked "battle-only,"
+  and there's currently no form-aware sprite support at all (`SpriteHelper.SpeciesSpriteFile` takes
+  no form parameter, and no per-form sprite files are bundled) - would need that built first or
+  fall back to the base species sprite for Mega nodes. Deferred - not a crash fix, lower priority
+  than the open items above per the user's own "keeps crashing" complaint.
 
 ## LIVE TO-DO LIST (2026-07-23 overnight session, unattended - user asked this be kept explicit)
 
