@@ -2,9 +2,16 @@
 
 ## DECISIONS ONLY YOU CAN MAKE (flagged, not acted on)
 
-1. **Merge `3d-models-experimental` -> `master`?** Recommend AGAINST merging the assets in as-is
-   (+214MB `.glb` bundle). See item 4 below - fetch-on-demand + disk cache is the better shape for
-   this, and would mean the branch's *code* merges but not its *asset files*. Still your call.
+1. **User decided (2026-07-25): fetch-on-demand approach approved, and "merge it all."** Read as
+   approving the fetch-on-demand architecture (item 4) for both 3D models and hi-res art, and
+   wanting the 3D viewer feature integrated into `master` under that architecture - NOT a literal
+   `git merge` of the `3d-models-experimental` branch. **A literal merge must not happen**: that
+   branch's commits carry +214MB of `.glb` blobs, and once a commit containing them becomes an
+   ancestor of `master`, those blobs are in `master`'s history forever (`git rm` afterward does
+   NOT undo this - the blobs stay reachable and land in every future clone of the public repo).
+   The correct path is porting the branch's *code* (page, route, "View in 3D" button) freshly onto
+   `master`, rewritten against fetch-on-demand instead of the branch's bundled-assets approach -
+   never merging the branch ref itself. See the next item for why that rewrite isn't done yet.
 2. **The "optimised vs full-scale model" toggle you asked for is not buildable as scoped.**
    Checked the upstream asset source directly: it only publishes one (already-optimized) variant
    per species - there is no separate full-scale/high-poly source to toggle to. If you want this,
@@ -36,16 +43,45 @@
      explains it, and the emulator's log buffer doesn't show anything else. A repro (which screen,
      which save file, what action) would let this go further; guessing further without one risks
      the "unverified 'fix'" pattern flagged in item 4.
-4. **Architecture decision needed: bundle vs. fetch-and-cache for large assets.** Confirmed via a
-   Haiku research pass that `PokeAPI/sprites`' `official-artwork` set (CC0-licensed, full 1-1025
-   coverage including shiny) would add another **~292MB** if bundled - on top of the 3D branch's
-   214MB, that's ~506MB baked into the APK, which isn't viable. Recommend **fetch-on-demand +
-   disk cache** for both the hi-res Pokedex artwork and (if you do want it kept) the 3D models:
-   download on first view, cache under `FileSystem.CacheDirectory`, fall back to the already-
-   bundled small pixel sprite if offline/uncached. This also sidesteps the 3D branch's merge-size
-   concern in item 1. Not started - this is a real architecture choice (offline availability vs.
-   app size vs. requiring network on first view of each Pokemon) that's yours to make before any
-   code gets written against it.
+4. **Fetch-on-demand for large assets - approved, hi-res art can proceed, 3D viewer needs a real
+   serving mechanism first (in progress, not yet solved).** Two separate pieces:
+   - **Hi-res Pokedex artwork** (`PokeAPI/sprites`'s CC0-licensed `official-artwork`, confirmed full
+     1-1025 coverage incl. shiny, ~150KB/image): straightforward to build fetch-on-demand + disk
+     cache for - this is a normal `HttpClient` GET + `Image` control + cache directory, no unusual
+     serving problem. Not yet built.
+   - **3D models**: harder than the artwork case, because the previous branch's `HybridWebView`
+     mechanism only serves *bundled* (build-time) assets - it has no way to serve a file fetched
+     into the cache directory at runtime. Prototyped an alternative (plain `WebView` +
+     `HtmlWebViewSource`, feeding the fetched `.glb` bytes in as a base64 `data:` URI, avoiding
+     file-serving entirely) directly on-device against the largest bundled model (species 979,
+     ~8.2MB) before building anything further on top of it, per your standing preference for
+     verifying before building. Two attempts, both inconclusive/negative so far:
+     - Attempt 1 (JS also loaded via `data:` src, no `BaseUrl`): loaded and failed fast and loudly -
+       logcat showed real `THREE.GLTFLoader: Couldn't load texture blob:null/...` and repeated
+       `THREE.DRACOLoader: Unexpected geometry type` errors, both consistent with the whole page
+       getting a null/opaque origin from `loadDataWithBaseURL(null, ...)`.
+     - Attempt 2 (model-viewer.min.js inlined as literal script text, `HtmlWebViewSource.BaseUrl`
+       set to a fake `https://` origin to give the page a real origin): silent failure - no console
+       output at all (checked via `adb logcat`, not a bridge - see the note below), no crash, no
+       render, even after 4+ minutes. Likely explanation: inlining a bundled ES module as raw
+       script text breaks whatever relative-path resolution it uses internally (e.g. a Web
+       Worker-hosted Draco decoder fetching a sibling file) - and Worker-thread console output may
+       not surface through the same logcat channel that caught attempt 1's main-thread errors.
+     - **Useful tooling finding, independent of the outcome above**: real WebView/three.js JS
+       console output (`[INFO:CONSOLE(...)] "..."`) is directly visible via plain `adb logcat -d`
+       under the `chromium` tag - no `RawMessageReceived` bridge or custom `WebChromeClient` needed.
+       The 3D branch's own prior investigation assumed this needed building first; it doesn't.
+       Reuse this the next time anyone needs to debug what a WebView-hosted page is actually doing.
+     - **Not yet tried**: a tiny loopback HTTP server (e.g. `HttpListener` bound to
+       `127.0.0.1`) serving the cache directory, paired with a plain `WebView.Source = <url>`. This
+       gives a real, unambiguous origin (fixing the blob:/Worker problems in one move) and would
+       also happen to eliminate the `HybridWebView`/`DefaultFile`/`EvaluateJavaScriptAsync` crash
+       path from decision item 3 entirely, since it doesn't use `HybridWebView` at all. This is the
+       recommended next step for the 3D viewer specifically - not started, given it's a real
+       engineering effort (an embedded HTTP server) and the crash/bug-testing pass (below) was
+       judged higher priority given the user's explicit "keeps crashing" complaint.
+   - All temporary prototype code was removed from `master` after these tests (never committed) -
+     `git status` is clean.
 
 ## 2026-07-25 pass: crash re-investigation, 3D branch findings, two Haiku research tasks
 
