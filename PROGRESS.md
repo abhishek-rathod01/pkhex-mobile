@@ -2314,3 +2314,33 @@ dirty-tracking race with `isLoading` resetting first); the post-save call site i
 `await`ed since `OnSaveChangesClicked` is already `async`. Build clean, 0 errors, baseline 7
 warnings. Not yet re-measured on-device for ANR frequency - flagging as the most concrete lead for
 the "it keeps crashing" report, pending confirmation it was the actual cause on the user's device.
+
+## Untouched-save identity invariant (`verify/UntouchedSaveInvariant`)
+
+Per an `advisor` review during the residual-nickname-bug fix: every harness written for the
+DatePicker/Nickname/CurrentLevel bugs this session only asserted the ONE field each was written to
+catch, not full identity - the actual systemic gap that let three separate instances of the same
+bug class ("a save silently mutates a field the user never touched") ship before being caught. This
+harness closes that gap in one sweep: it mirrors `PokemonDetailPage.xaml.cs`'s ENTIRE
+`OnSaveChangesClicked` write path in a single function, feeding every "new*" value from `pk`'s own
+current state (simulating a user who opened the mon and changed nothing), then asserts full
+field-for-field identity - every field the real method touches (Nickname/IsNicknamed, Species,
+Form, Level/EXP, all 4 moves + PP + PP-Ups, Ability, Nature, StatAlignment, HeldItem, Ball,
+Friendship, Gender, Pokerus Strain/Days, IsEgg, Version, Met/Egg location+level+date, all 6 IVs, all
+6 EVs, markings, CurrentHandler, and the computed stat block) - after `Write()` + reload, plus the
+original file on disk byte-for-byte unchanged. Deliberately forces every format-capability gate
+(the real method's `formEditable`/`abilityEditable`/etc.) to always-apply rather than replicating
+the per-generation `PopulateXxx` detection logic, since with an unchanged value this is either a
+true no-op (a documented per-gen no-op setter, e.g. Gen3 Ability) or a same-value reassignment -
+exactly what the harness needs to stress-test. The naturally delta-gated assignments (Nickname,
+CurrentLevel, Met/Egg date) use the real method's own value-comparison logic unmodified.
+
+Run across Gen9 Scarlet, Gen5 Black, Gen4 HeartGold, Gen3 Emerald, and Gen1 RBY party slot 0 - **all
+pass** on every axis (full field identity, markings identity, original file unchanged). This
+confirms the three fixes already shipped this session hold up under a much stronger check than
+their own dedicated harnesses, and that nothing else in this write path (the unconditional
+`SetMoves` call in particular, which was a real candidate given it wasn't baseline-gated like the
+others) silently corrupts an untouched save. A read-only Haiku audit of the other
+`SaveFile`/`PKM`-mutating pages (`PokemonTransferPage.xaml.cs`, `BoxListPage.xaml.cs`,
+`TrainerInfoPage.xaml.cs`, `BoxManagement.cs`) for the same bug class came back clean, citing
+existing capability gates, baseline-value checks, and read-back verification already in place.
