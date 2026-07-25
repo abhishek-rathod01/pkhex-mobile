@@ -2266,3 +2266,51 @@ mon silently marked nicknamed, or lost EXP overshoot on a below-max-level mon. T
 retroactively detect or repair already-affected files from here - flagging this for awareness, not
 attempting a "scan and fix" pass, since this app has no way to distinguish "genuinely re-nicknamed
 by the user at some point" from "silently flipped by this bug" after the fact.
+
+## Residual nickname bug (mirror image of the one just above) - found via `advisor`, fixed
+
+The Nickname fix above compared `NicknameEntry.Text` against `newSpecies`'s own default display
+name (`SpeciesName.IsNicknamed`) **unconditionally on every save**. That correctly fixed the
+original bug, but reintroduced the exact same bug class in the opposite direction: a mon a player
+deliberately nicknamed to **exactly its own species' default name** (e.g. a Pikachu nicknamed
+literally "Pikachu", a real scenario with `IsNicknamed=true`) reads as "not a real nickname" under
+a pure value comparison, so an untouched save of that mon silently flipped `IsNicknamed` back to
+`false`. The existing `NicknameLevelFix` harness didn't catch it because its one "already
+nicknamed" test case used a name ("Snake") that doesn't collide with any species' default text.
+
+Fixed by switching from a value comparison to a **baseline comparison** - the same pattern already
+used for the DatePicker fix: `if (speciesChanged || nicknameText != pk.Nickname)` gates the whole
+block, so an untouched mon's nickname state (whatever it is, including a deliberately
+species-matching one) is left completely alone unless the species changed or the text was actually
+edited from what was loaded. Only inside that gate does `SpeciesName.IsNicknamed` decide real-vs-
+default - same as before, just no longer evaluated on saves where nothing about the nickname
+changed. Added a regression case to `verify/NicknameLevelFix` (mon nicknamed to its own species
+default, `IsNicknamed=true`, must survive an untouched save) - failed pre-fix logic, passes now;
+all other existing cases in that harness still pass unchanged.
+
+This was caught by `advisor` review before it shipped further, not by a user report or a subagent -
+worth noting as the second time this exact bug class (a save mutating a field the user never
+touched) has slipped past an otherwise-passing "set X, assert X persists" harness. The harness
+methodology gap: none of this project's verify harnesses assert full field-for-field identity on a
+completely untouched round-trip; they only assert the specific field each harness was written to
+check. A broader identity-on-no-edit invariant (load real save, apply zero edits, `Write()`+reload,
+assert every field bit-identical) would catch this whole class in one sweep rather than one field
+at a time - noted as a real gap, not yet built as a dedicated harness.
+
+## RefreshLegality moved off the UI thread (perf/ANR fix)
+
+`RefreshLegality` (`PokemonDetailPage.xaml.cs`) constructed `new LegalityAnalysis(p)` synchronously
+on the UI thread, on every page load and every successful save. `LegalityAnalysis` does full
+encounter matching, which is not free (the method's own long-standing comment already said so) -
+on Gen3-5 saves in particular this is exactly the kind of synchronous work that trips Android's
+"Input dispatching timed out" ANR, the same crash/freeze class investigated after a user report of
+the app "crashing." Fixed using the same `Task.Run` pattern already established in
+`PokedexDetailPage.xaml.cs`'s encounter-location lookup: `RefreshLegality` is now `async Task`,
+awaiting `Task.Run(() => new LegalityAnalysis(p))` before touching any UI element. The
+`LoadPokemonCore` call site (itself synchronous, called from `OnAppearing`) fires it with `_ =
+RefreshLegality(p)` (nothing downstream depends on the legality badge being ready before the page
+becomes interactive, and none of the labels it touches are `MarkDirty`-wired, so there's no
+dirty-tracking race with `isLoading` resetting first); the post-save call site is properly
+`await`ed since `OnSaveChangesClicked` is already `async`. Build clean, 0 errors, baseline 7
+warnings. Not yet re-measured on-device for ANR frequency - flagging as the most concrete lead for
+the "it keeps crashing" report, pending confirmation it was the actual cause on the user's device.

@@ -387,7 +387,11 @@ public partial class PokemonDetailPage : ContentPage
         PopulateOrigin(p);
         PopulatePpFields(p);
         RefreshComputed(p);
-        RefreshLegality(p);
+        // Fire-and-forget: LoadPokemonCore/LoadPokemon/OnAppearing are synchronous, and nothing
+        // downstream depends on the legality badge being populated before the page is interactive.
+        // RefreshLegality only touches read-only labels, none of them MarkDirty-wired inputs, so
+        // there's no dirty-tracking race with isLoading being reset to false before this completes.
+        _ = RefreshLegality(p);
 
         SaveStatusLabel.Text = string.Empty;
         SaveChangesBtn.IsVisible = parentSave is not null;
@@ -867,9 +871,15 @@ public partial class PokemonDetailPage : ContentPage
     // auto-fix applied anywhere). Recomputed here and again after a successful save, since species/
     // move/stat edits change the result - never live per-keystroke, matching the existing
     // hero/title refresh cadence.
-    private void RefreshLegality(PKM p)
+    // `new LegalityAnalysis(p)` runs full encounter matching (not free - see the comment further
+    // down) directly on the UI thread; on Gen3-5 saves this was measured to take long enough to
+    // trip Android's "Input dispatching timed out" ANR on page load and after every save. Same
+    // fix as PokedexDetailPage's encounter-location lookup (Task.Run, see its own comment) - the
+    // construction moves to a background thread and only the resulting read-only report is
+    // marshalled back for the UI updates below.
+    private async Task RefreshLegality(PKM p)
     {
-        var la = new LegalityAnalysis(p);
+        var la = await Task.Run(() => new LegalityAnalysis(p));
         var suffix = la.Valid ? "Pass" : "Fail";
         var resources = Application.Current!.Resources;
 
@@ -1480,29 +1490,30 @@ public partial class PokemonDetailPage : ContentPage
 
         try
         {
-            // Only mark this as an explicit nickname if the text doesn't match newSpecies's OWN
-            // default display name (SpeciesName.GetSpeciesNameGeneration) - mirrors PKHeX.Core's
-            // own SetNickname/ClearNickname split (CommonEdits.cs), not an app-invented rule.
-            // Previously this unconditionally forced pk.IsNicknamed = true on every single save
-            // regardless of whether the text was ever actually customized. For a real
-            // non-nicknamed mon, PKM.Nickname already equals its species' default name (confirmed
-            // against real saves - every Gen9 Scarlet party mon, most Gen1/Gen3 party mons in this
-            // project's test saves) - so NicknameEntry.Text = p.Nickname at load already shows
-            // that same default text, and the old code silently flipped IsNicknamed false->true on
-            // ANY unrelated field edit (an IV, a PP value, a Met Level...), permanently
-            // mis-marking an un-nicknamed mon as explicitly nicknamed. Same bug class as the
-            // DatePicker's untouched-date corruption found earlier this session - a save silently
-            // mutating a flag the user never touched.
-            // Evaluated against newSpecies (the species this mon will actually be after this
-            // save), not the pre-edit species, so changing species without also updating the
-            // nickname text correctly registers as a real custom nickname (matching real
-            // in-game/traded-Pokemon behavior - an old nickname that no longer matches the new
-            // species' default is still a real nickname), not a stale default being misread.
+            // Baseline-gated, same pattern as the DatePicker fix: only touch Nickname/IsNicknamed
+            // at all if the nickname text was actually edited by the user OR the species changed.
+            // An earlier version of this fix compared nicknameText against newSpecies's default
+            // name (SpeciesName.IsNicknamed) UNCONDITIONALLY on every save - which fixed the
+            // original bug (unconditional IsNicknamed=true) but reintroduced the same bug class in
+            // the opposite direction: a mon a player deliberately nicknamed to exactly its own
+            // species' default name (e.g. a Pikachu nicknamed "Pikachu", IsNicknamed=true) would
+            // have that value-comparison read as "not a real nickname" and get silently flipped to
+            // IsNicknamed=false on every untouched save. Comparing against pk.Nickname (the value
+            // actually loaded, still unmutated here) instead of against the species-name pattern
+            // means an untouched mon's nickname state - whatever it is - is left completely alone.
             var nicknameText = NicknameEntry.Text ?? string.Empty;
-            if (SpeciesName.IsNicknamed(newSpecies, nicknameText, pk.Language, pk.Format))
-                pk.SetNickname(nicknameText);
-            else
-                pk.ClearNickname();
+            if (speciesChanged || nicknameText != pk.Nickname)
+            {
+                // Only decide real-vs-default via SpeciesName.IsNicknamed (PKHeX.Core's own
+                // SetNickname/ClearNickname split, CommonEdits.cs) once we know something actually
+                // changed - evaluated against newSpecies so a species change with a stale nickname
+                // text correctly registers as a real custom nickname (matches real in-game/traded
+                // Pokemon behavior), and a genuine new nickname typed by the user is always real.
+                if (SpeciesName.IsNicknamed(newSpecies, nicknameText, pk.Language, pk.Format))
+                    pk.SetNickname(nicknameText);
+                else
+                    pk.ClearNickname();
+            }
 
             // Species BEFORE level: CurrentLevel is stored as EXP, and EXP<->level depends on the
             // species' growth-rate group. Setting the level first (under the old species' growth
@@ -1685,7 +1696,7 @@ public partial class PokemonDetailPage : ContentPage
                 PopulateOrigin(pk);
                 PopulatePpFields(pk);
                 RefreshComputed(pk);
-                RefreshLegality(pk);
+                await RefreshLegality(pk);
 
                 // Design-notes.md Save button rule 3: return to disabled immediately after a
                 // successful save.

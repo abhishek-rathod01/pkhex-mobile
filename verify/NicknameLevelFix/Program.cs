@@ -38,9 +38,15 @@ void Check(string label, bool ok)
     if (!ok) allOk = false;
 }
 
-// Mirrors the FIXED nickname logic in OnSaveChangesClicked.
-void ApplyNickname(PKM pk, ushort newSpecies, string nicknameText)
+// Mirrors the FIXED (baseline-gated) nickname logic in OnSaveChangesClicked. An earlier version
+// compared nicknameText against newSpecies's default name UNCONDITIONALLY, which reintroduced the
+// same bug class in the opposite direction: a mon genuinely nicknamed exactly its species' default
+// name (IsNicknamed=true) got silently flipped to false on an untouched save. Gating on "did
+// anything actually change" (species changed, or the text differs from what was loaded) before
+// doing the real-vs-default evaluation closes that gap.
+void ApplyNickname(PKM pk, ushort newSpecies, bool speciesChanged, string nicknameText)
 {
+    if (!speciesChanged && nicknameText == pk.Nickname) return;
     if (SpeciesName.IsNicknamed(newSpecies, nicknameText, pk.Language, pk.Format))
         pk.SetNickname(nicknameText);
     else
@@ -75,7 +81,7 @@ void RunUntouchedSaveCase(string genLabel, string path, int partySlot)
     // populated from pk.Nickname/pk.CurrentLevel at load and never edited.
     string nicknameTextFromUi = pk.Nickname;
     byte levelFromUi = pk.CurrentLevel;
-    ApplyNickname(pk, pk.Species, nicknameTextFromUi);
+    ApplyNickname(pk, pk.Species, speciesChanged: false, nicknameTextFromUi);
     ApplyLevel(pk, speciesChanged: false, formChanged: false, levelFromUi);
 
     sav.SetPartySlotAtIndex(pk, partySlot, EntityImportSettings.None);
@@ -99,13 +105,34 @@ RunUntouchedSaveCase("Gen5 Black (already nicknamed)", Path.Combine(dir, "Pokemo
 RunUntouchedSaveCase("Gen1 RBY (non-nicknamed)", Path.Combine(dir, "POKEMON RED-0.sav"), 0);
 RunUntouchedSaveCase("Gen3 Emerald (non-nicknamed)", Path.Combine(dir, "pokeemerald (2).sav"), 0);
 
+// Regression case for the residual bug the value-comparison version of this fix reintroduced: a
+// mon deliberately nicknamed to EXACTLY its own species' default name (IsNicknamed=true) must
+// survive an untouched save. A value-comparison ("does the text match the species default?")
+// reads this as "not a real nickname" and silently clears IsNicknamed - the same bug class, mirror
+// image. The baseline-gated version must leave it alone since the text never changed from load.
+{
+    Console.WriteLine("\n=== Residual-bug regression: nickname deliberately set to the species' own default text ===");
+    var sav = SaveUtil.GetSaveFile((byte[])File.ReadAllBytes(Path.Combine(dir, "pkmnscarlet_100", "main")).Clone())!;
+    var pk = sav.PartyData[0];
+    var speciesDefault = SpeciesName.GetSpeciesNameGeneration(pk.Species, pk.Language, pk.Format);
+    pk.SetNickname(speciesDefault); // simulates a player deliberately typing their species' own name
+    Check("Setup: nickname now matches species default text", pk.Nickname == speciesDefault);
+    Check("Setup: IsNicknamed is true (a real, deliberate nickname)", pk.IsNicknamed);
+
+    // Untouched save: UI text box was populated from pk.Nickname at load and never edited.
+    string nicknameTextFromUi = pk.Nickname;
+    ApplyNickname(pk, pk.Species, speciesChanged: false, nicknameTextFromUi);
+    Check("Species-name nickname's IsNicknamed survives an untouched save", pk.IsNicknamed);
+    Check("Species-name nickname's text survives an untouched save", pk.Nickname == speciesDefault);
+}
+
 // Genuine nickname edit: user types a real new nickname on a previously non-nicknamed mon.
 {
     Console.WriteLine("\n=== Genuine new nickname on a previously non-nicknamed mon ===");
     var sav = SaveUtil.GetSaveFile((byte[])File.ReadAllBytes(Path.Combine(dir, "pkmnscarlet_100", "main")).Clone())!;
     var pk = sav.PartyData[0];
     Check("Precondition: was not nicknamed", !pk.IsNicknamed);
-    ApplyNickname(pk, pk.Species, "MyBuddy");
+    ApplyNickname(pk, pk.Species, speciesChanged: false, "MyBuddy");
     Check("Genuine nickname sets IsNicknamed=true", pk.IsNicknamed);
     Check("Genuine nickname text sticks", pk.Nickname == "MyBuddy");
 }
@@ -117,7 +144,7 @@ RunUntouchedSaveCase("Gen3 Emerald (non-nicknamed)", Path.Combine(dir, "pokeemer
     var sav = SaveUtil.GetSaveFile((byte[])File.ReadAllBytes(Path.Combine(dir, "Pokemon Black Version.sav")).Clone())!;
     var pk = sav.PartyData[0];
     Check("Precondition: was nicknamed", pk.IsNicknamed);
-    ApplyNickname(pk, pk.Species, "");
+    ApplyNickname(pk, pk.Species, speciesChanged: false, "");
     Check("Clearing nickname sets IsNicknamed=false", !pk.IsNicknamed);
     var expectedDefault = SpeciesName.GetSpeciesNameGeneration(pk.Species, pk.Language, pk.Format);
     Check("Clearing nickname restores the species default text", pk.Nickname == expectedDefault);
@@ -131,7 +158,7 @@ RunUntouchedSaveCase("Gen3 Emerald (non-nicknamed)", Path.Combine(dir, "pokeemer
     var pk = sav.PartyData[0];
     string staleText = pk.Nickname; // "Skeledirge" - the OLD species' default
     ushort newSpecies = 25; // Pikachu - unrelated species, staleText won't match its default
-    ApplyNickname(pk, newSpecies, staleText);
+    ApplyNickname(pk, newSpecies, speciesChanged: true, staleText);
     Check("Stale nickname after a species change registers as a real nickname", pk.IsNicknamed);
     Check("Stale nickname text is preserved as typed", pk.Nickname == staleText);
 }
