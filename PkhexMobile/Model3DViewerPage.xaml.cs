@@ -63,6 +63,47 @@ public partial class Model3DViewerPage : ContentPage
             return;
         }
 
+        await ShowModelAsync(pageFileName);
+    }
+
+    // Setting DefaultFile makes MAUI's HybridWebViewHandler issue an internal JS navigation
+    // (EvaluateJavaScriptAsync) to load that file into the already-running WebView. A real crash
+    // hit during this session (android.runtime.JavaProxyThrowable: PlatformView cannot be null
+    // here, at HybridWebViewHandler.MapEvaluateJavaScriptAsync) shows this can fire before the
+    // native Android WebView has actually been created by the handler - the C# Handler object can
+    // exist while its PlatformView is still null, a timing gap between handler attachment and the
+    // native view's own construction. This is the same underlying race already documented above
+    // for a direct app-level EvaluateJavaScriptAsync call (attempt 1); it turns out avoiding that
+    // call in app code (switching to DefaultFile) didn't close the race, since DefaultFile issues
+    // the equivalent call internally. Waiting for PlatformView to actually exist before touching
+    // DefaultFile closes the gap without guessing at framework internals further; a bounded
+    // timeout falls back to the 2D sprite rather than hanging if the platform view never appears.
+    async Task ShowModelAsync(string pageFileName)
+    {
+        if (ModelWebView.Handler?.PlatformView is null)
+        {
+            var tcs = new TaskCompletionSource();
+            void OnHandlerChanged(object? s, EventArgs e)
+            {
+                if (ModelWebView.Handler?.PlatformView is not null)
+                    tcs.TrySetResult();
+            }
+            ModelWebView.HandlerChanged += OnHandlerChanged;
+            try
+            {
+                var completed = await Task.WhenAny(tcs.Task, Task.Delay(3000));
+                if (completed != tcs.Task)
+                {
+                    ShowFallback("3D view couldn't load right now - showing the 2D sprite instead.");
+                    return;
+                }
+            }
+            finally
+            {
+                ModelWebView.HandlerChanged -= OnHandlerChanged;
+            }
+        }
+
         ModelWebView.DefaultFile = pageFileName;
         ModelWebView.IsVisible = true;
         FallbackPanel.IsVisible = false;

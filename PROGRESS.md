@@ -1880,3 +1880,54 @@ equivalent MAUI `HybridWebView` hook, if one exists) to `Model3DViewerPage`, rep
 Charizard, and read the actual JS-side error/warning before attempting any fix - guessing at a
 `model-viewer.min.js` version bump without that evidence risks trading one unverified state for
 another.
+
+## Follow-up pass (2026-07-25): PlatformView crash mitigation (tentative), color root cause still open, cold-start theory refuted
+
+**Crash mitigation, NOT confirmed fixed.** A real crash was found in this session's logcat this
+pass too: `android.runtime.JavaProxyThrowable: [System.InvalidOperationException]: PlatformView
+cannot be null here`, at `HybridWebViewHandler.MapEvaluateJavaScriptAsync`, dated 2026-07-23. This
+fires from MAUI's own internal handling of the `DefaultFile` property change (this page never
+calls `EvaluateJavaScriptAsync` directly - see the six-attempts history above), when the native
+Android `WebView` isn't yet alive under the C# `Handler`. `Model3DViewerPage.OnAppearing` now waits
+on `ModelWebView.HandlerChanged` until `Handler?.PlatformView` is non-null (bounded to 3s, falling
+back to the 2D sprite if it never appears) before setting `DefaultFile`. **This narrows the timing
+window but does not provably close it**: the stack trace shows the exception is actually rethrown
+on a *posted* `SyncContext` continuation (`Task.ThrowAsync` -> `ExceptionDispatchInfo.Throw`,
+observed well after the synchronous call that triggered it returns) - an unobserved-Task-exception
+pattern that a synchronous state check can reduce the likelihood of hitting but can't fully
+guarantee against. The original crash has NOT been reproduced this pass (dated two days prior), so
+this fix's effectiveness is unverified. Label it a tentative mitigation, not a confirmed fix, until
+either the original crash is reproduced and shown not to recur, or a framework-level backstop
+(e.g. `AndroidEnvironment.UnhandledExceptionRaiser` narrowly matching this exact exception) is
+added and tested.
+
+**Off-colour models: root cause still not identified, one theory eliminated for free.** Inspected
+`6.glb`'s JSON chunk directly this pass: all 5 images use `bufferView` (embedded in the binary
+chunk), none use `uri` - so an external-URI-blocked-by-HybridWebView's-virtual-host theory is
+eliminated. The `EXT_texture_webp`/Draco-decode-failure theory from the prior pass remains
+unconfirmed - a JS probe injected into a scratch copy of `model_6.html` (checking
+`model-viewer`'s own bundled WebP-support test, plus logging `mv.model.materials[i]` texture
+assignment via `HybridWebView.SendRawMessage`) was written and ready to run, but the on-device pass
+this session got redirected into the cold-start investigation below before a result came back -
+the JS->C# message bridge direction was never confirmed working or broken (the previously-noted
+broken bridge was specifically C#->JS). Left as a concrete, ready-to-run next step, not attempted
+further this pass to avoid burning more on-device cycles on an unconfirmed diagnostic.
+
+**Cold-start ANR theory (this branch's asset bundle causes slow startup): investigated and
+REFUTED.** Measured `ActivityTaskManager: Displayed ... for user 0` on a clean second launch
+(force-stop, launch, wait for full first-run completion, force-stop again, launch, measure) on
+this branch: 39.5s and 32.9s across two runs, one of which surfaced as a genuine ANR dialog
+("Blocked in handler on main thread (main) for 16s"). This looked at first like strong evidence the
++214MB / 1866 extra `Resources/Raw/model3d` files (vs. `master`'s 2.7MB total) were the cause.
+**The same measurement taken on `master` - zero 3D assets - also produced 33.4s** under otherwise
+identical conditions (same emulator, same Debug configuration, host otherwise idle). This
+conclusively refutes "the 3D asset bundle causes slow cold start" - `master` doesn't have the
+assets and is exactly as slow. The real driver is almost certainly Debug-build first/early-launch
+cost inherent to .NET-for-Android on this specific x86_64 emulator (logcat shows `Installing
+profile for...`, repeated `Verification of ... took Nms` bytecode-verification entries, and a
+"CPU variant for x86: x86_64... Unknown variant" warning suggesting non-native JIT/interpreter
+overhead) - a debug/emulator characteristic of this whole project, not something specific to this
+branch or fixable by trimming assets. **Does not explain the user's crash report** on its own; a
+Release/AOT build on a real device would very plausibly not show this at all, but that comparison
+hasn't been run. Flagging this finding so a future pass doesn't re-investigate the same refuted
+theory from scratch.
