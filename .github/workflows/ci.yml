@@ -28,12 +28,13 @@ jobs:
     # These harnesses construct library-generated test saves and verify basic
     # parsing/manipulation correctness for each generation.
     #
-    # Excluded from CI (file-dependent, require C:\Users\abhis\Downloads\sav files pkmn):
-    #  - verify/Inventory/Program.cs (requires directory argument, scans real save files)
-    #  - verify/EditRoundTrip/Program.cs (tests round-trip with real save files)
-    #  - verify/Gen12IvCap/Program.cs (tests against real Gen1/2 saves)
-    #  - verify/BoxInventory/Program.cs (scans real save boxes)
-    #  - verify/SpeciesMoveEdit/Program.cs (tests species/move edits on real saves)
+    # Only verify/Gen1..Gen9 run here - every other verify/* harness is excluded from CI because it
+    # hardcodes a local save-file path (C:\Users\abhis\Downloads\sav files pkmn, a real device's own
+    # game saves, gitignored and never present in CI). This list has grown well past a handful over
+    # time (grep each harness's Program.cs for that path if you need the current exact list) - the
+    # rule is simpler than tracking every name: if it's not explicitly added as a step below, it
+    # doesn't run in CI, full stop. Don't add a new harness as a CI step unless it's genuinely
+    # self-contained (constructs/derives its own test data, no local file dependency).
 
     - name: Verify Gen1 (Red/Blue/Yellow)
       run: dotnet run --project verify/Gen1 -c Release

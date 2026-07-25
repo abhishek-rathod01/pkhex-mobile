@@ -149,7 +149,7 @@ public partial class PokemonTransferPage : ContentPage
     // Export
     // ---------------------------------------------------------------------------------------
 
-    private async void OnExportEntityClicked(object sender, EventArgs e)
+    private async void OnExportEntityClicked(object? sender, EventArgs e)
     {
         if (pk is null)
             return;
@@ -170,7 +170,7 @@ public partial class PokemonTransferPage : ContentPage
         }
     }
 
-    private async void OnCopyShowdownClicked(object sender, EventArgs e)
+    private async void OnCopyShowdownClicked(object? sender, EventArgs e)
     {
         var text = ShowdownExportEditor.Text;
         if (string.IsNullOrWhiteSpace(text))
@@ -190,7 +190,7 @@ public partial class PokemonTransferPage : ContentPage
         }
     }
 
-    private async void OnSaveShowdownClicked(object sender, EventArgs e)
+    private async void OnSaveShowdownClicked(object? sender, EventArgs e)
     {
         if (pk is null)
             return;
@@ -224,7 +224,7 @@ public partial class PokemonTransferPage : ContentPage
     // Import
     // ---------------------------------------------------------------------------------------
 
-    private async void OnImportEntityClicked(object sender, EventArgs e)
+    private async void OnImportEntityClicked(object? sender, EventArgs e)
     {
         if (parentSave is null)
             return;
@@ -274,7 +274,7 @@ public partial class PokemonTransferPage : ContentPage
         }
     }
 
-    private async void OnPasteShowdownClicked(object sender, EventArgs e)
+    private async void OnPasteShowdownClicked(object? sender, EventArgs e)
     {
         try
         {
@@ -293,7 +293,7 @@ public partial class PokemonTransferPage : ContentPage
         }
     }
 
-    private void OnApplyShowdownClicked(object sender, EventArgs e)
+    private void OnApplyShowdownClicked(object? sender, EventArgs e)
     {
         if (pk is null || parentSave is null)
             return;
@@ -337,7 +337,7 @@ public partial class PokemonTransferPage : ContentPage
     // Save
     // ---------------------------------------------------------------------------------------
 
-    private async void OnSaveChangesClicked(object sender, EventArgs e)
+    private async void OnSaveChangesClicked(object? sender, EventArgs e)
     {
         if (parentSave is null || pk is null)
             return;

@@ -174,9 +174,10 @@ behind a plain picker. Same call for Gen 1-3's Unown-only Form setter.
   `verify/**/*.sav` in `.gitignore`. Screenshots and `uiautomator` XML dumps are fine.
 - Remote: `github.com/abhishek-rathod01/pkhex-mobile`. `vendor/PKHeX.Core` is vendored
   third-party code — see the README license notice.
-- CI (`.github/workflows/ci.yml`) builds `vendor/PKHeX.Core` and runs the 9 self-contained
-  `verify/Gen1..9` harnesses. The 5 harnesses that hardcode local save paths are deliberately
-  excluded and documented in the workflow.
+- CI (`.github/workflows/ci.yml`) builds `vendor/PKHeX.Core` and runs **only** the 9 self-contained
+  `verify/Gen1..9` harnesses. Every other `verify/*` harness hardcodes a local save-file path and is
+  excluded by simply not being added as a CI step — this list has grown well past a handful, so
+  don't rely on a specific count; see the workflow file's own comment for the exact rule.
 
 ---
 
