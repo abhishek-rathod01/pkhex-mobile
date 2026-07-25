@@ -879,7 +879,14 @@ public partial class PokemonDetailPage : ContentPage
     // marshalled back for the UI updates below.
     private async Task RefreshLegality(PKM p)
     {
-        var la = await Task.Run(() => new LegalityAnalysis(p));
+        // Clone before handing off to the background thread: p is a live, mutable reference the UI
+        // thread can keep editing (species/moves/stats) while this runs. Analyzing the live object
+        // is a genuine data race - LegalityAnalysis enumerates multiple fields un-atomically, so a
+        // concurrent edit could produce a torn read (stale/wrong badge) or, worse, an out-of-range
+        // index if a byte is mid-write when a species-dependent array is sized against it. Cloning
+        // is a cheap byte-array copy and removes the race entirely.
+        var snapshot = p.Clone();
+        var la = await Task.Run(() => new LegalityAnalysis(snapshot));
         var suffix = la.Valid ? "Pass" : "Fail";
         var resources = Application.Current!.Resources;
 
