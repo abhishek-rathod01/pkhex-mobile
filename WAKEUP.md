@@ -1,5 +1,25 @@
 # WAKEUP — read this first
 
+## 2026-07-25, later pass: bug-testing sweep results
+
+Per the user's explicit "do extensive bug testings and optimisations" request, continued via a
+scheduled cron wakeup (the session was paused/resumed mid-turn at the user's request):
+- Built `verify/UntouchedSaveInvariant` - the general-purpose version of the DatePicker/Nickname/
+  CurrentLevel bug-specific harnesses, asserting FULL field identity (not just one field) on a
+  completely untouched save across Gen1/3/4/5/9. All pass - confirms the three fixes already
+  shipped hold up under a stronger check, and nothing else in `PokemonDetailPage`'s save path
+  (including the unconditional `SetMoves` call, a real candidate) silently corrupts data.
+- A read-only Haiku audit of the other `SaveFile`/`PKM`-mutating pages (`PokemonTransferPage`,
+  `BoxListPage`, `TrainerInfoPage`, `BoxManagement.cs`) for the same bug class came back clean.
+- Audited for other ANR-prone synchronous PKHeX.Core calls beyond the already-fixed
+  `RefreshLegality`: `GameUtil.GetVersionsWithinRange`/`GameInfo.GetLocationList` (used in
+  `PopulateOrigin`) are cheap in-memory table lookups, confirmed by reading their PKHeX.Core
+  implementations directly - not a real ANR risk. Grepped the whole app for the two operation
+  types actually known to be expensive (`new LegalityAnalysis`, `EncounterMovesetGenerator`) -
+  both of their only call sites in the app are now correctly wrapped in `Task.Run`. This specific
+  bug-class audit is exhausted; no further findings without a new lead (e.g. a repro from the
+  user, or a different operation type flagged as slow).
+
 ## DECISIONS ONLY YOU CAN MAKE (flagged, not acted on)
 
 1. **User decided (2026-07-25): fetch-on-demand approach approved, and "merge it all."** Read as
