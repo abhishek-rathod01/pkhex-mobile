@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:PkhexMobile.Model3D"
+             x:Class="PkhexMobile.Model3D.Model3DViewerPage"
+             x:DataType="local:Model3DViewerPage"
+             BackgroundColor="{StaticResource BgApp}"
+             Title="3D Model">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- A plain WebView, not a HybridWebView. HybridWebView's DefaultFile handling is what
+             produced the "PlatformView cannot be null here" crash out of
+             HybridWebViewHandler.MapEvaluateJavaScriptAsync on the abandoned experimental
+             branch; avoiding that control entirely is the main reason the loopback server
+             exists. Source is assigned in code once the server is confirmed up and the model is
+             confirmed cached, so this never shows a half-loaded or error page. -->
+        <WebView x:Name="ModelWebView" Grid.Row="0" IsVisible="False" />
+
+        <!-- Honest-degradation panel. Whenever the WebView is not showing a real model this is
+             what the user sees instead: the 2D sprite they already know, a plain statement of
+             what is wrong, and (where it can help) a retry. Never a blank screen, never an
+             unresolving spinner. -->
+        <ScrollView x:Name="StatusPanel" Grid.Row="0">
+            <!-- Padding 16 = GutterScreen, Spacing 12 = GapCard; matched to the tokens in
+                 Resources/Styles/Tokens.xaml, written as literals the way every other page in
+                 this app writes them. -->
+            <VerticalStackLayout Padding="16" Spacing="12" VerticalOptions="Center">
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <VerticalStackLayout Spacing="12" HorizontalOptions="Center">
+
+                        <Image x:Name="FallbackSprite" WidthRequest="96" HeightRequest="96"
+                               Aspect="AspectFit" HorizontalOptions="Center" />
+
+                        <Label x:Name="StatusCaptionLabel" Text="3D MODEL"
+                               Style="{StaticResource LabelCaptionStyle}"
+                               HorizontalOptions="Center" />
+
+                        <Label x:Name="StatusTitleLabel" Style="{StaticResource ScreenTitleStyle}"
+                               HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
+
+                        <Label x:Name="StatusBodyLabel" Style="{StaticResource BodyStyle}"
+                               HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
+
+                        <Label x:Name="StatusWarningLabel" Style="{StaticResource WarningBannerStyle}"
+                               HorizontalTextAlignment="Center" LineBreakMode="WordWrap"
+                               IsVisible="False" />
+
+                        <Label x:Name="StatusDetailLabel" Style="{StaticResource MutedStyle}"
+                               FontSize="{StaticResource Text2xs}"
+                               HorizontalTextAlignment="Center" LineBreakMode="WordWrap"
+                               IsVisible="False" />
+
+                        <Button x:Name="RetryButton" Text="Try again"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Clicked="OnRetryClicked" HorizontalOptions="Center"
+                                IsVisible="False" />
+
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <Label x:Name="FooterLabel" Grid.Row="1" Padding="16,8"
+               Style="{StaticResource MutedStyle}" FontSize="{StaticResource Text2xs}"
+               LineBreakMode="WordWrap"
+               Text="Models are downloaded on demand and cached on this device. Nothing is bundled with the app." />
+
+    </Grid>
+
+</ContentPage>

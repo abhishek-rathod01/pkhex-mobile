@@ -493,7 +493,10 @@ public sealed class LoopbackModelServer : IDisposable, IAsyncDisposable
 		catch (ObjectDisposedException)
 		{
 		}
-		shutdown.Dispose();
+
+		// The CancellationTokenSource is deliberately NOT disposed. In-flight responses still
+		// hold shutdownToken; registering a callback on a token whose source has been disposed
+		// throws, and the only thing disposing would buy back is a handful of bytes.
 	}
 
 	/// <summary>
