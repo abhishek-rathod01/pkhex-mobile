@@ -333,6 +333,17 @@ public sealed class LoopbackModelServer : IDisposable, IAsyncDisposable
 		catch (InvalidOperationException)
 		{
 		}
+		catch (OperationCanceledException)
+		{
+			// Shutdown raced an in-flight response.
+		}
+		catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+		{
+			// This runs on the thread pool with no caller to observe it, so an escaping
+			// exception here is a silent faulted task at best. A failed response to the WebView
+			// is a page that does not render - which the UI already handles honestly - and is
+			// never worth risking the process over.
+		}
 	}
 
 	/// <summary>

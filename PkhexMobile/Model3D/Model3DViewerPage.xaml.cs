@@ -73,7 +73,34 @@ public partial class Model3DViewerPage : ContentPage
 		await PrepareAsync().ConfigureAwait(true);
 	}
 
+	/// <summary>
+	/// Never-throwing wrapper. Both callers are <c>async void</c> (a lifecycle override and an
+	/// event handler), where an escaping exception is an unhandled exception and therefore a
+	/// crash. Given that the whole point of this namespace is that nobody knows what the
+	/// platform will do, that backstop is not optional.
+	/// </summary>
 	async Task PrepareAsync()
+	{
+		try
+		{
+			await PrepareCoreAsync().ConfigureAwait(true);
+		}
+		catch (OperationCanceledException)
+		{
+			// Page navigated away mid-prepare. Nothing to show and nobody to show it to.
+		}
+		catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+		{
+			ShowStatus(
+				"3D view is unavailable",
+				"Something went wrong setting up the 3D view on this device.",
+				detail: ex.GetType().Name,
+				warning: "3D view is an unverified feature. It is disabled by default for exactly this reason.",
+				canRetry: true);
+		}
+	}
+
+	async Task PrepareCoreAsync()
 	{
 		// 1. The gate. Nothing below this line runs in a shipping build today.
 		if (!Model3DFeature.IsEnabled)
@@ -169,23 +196,34 @@ public partial class Model3DViewerPage : ContentPage
 		ShowWebView(url);
 	}
 
+	/// <summary>
+	/// Cancels any in-flight preparation and shuts the server down. Never throws, for the same
+	/// reason <see cref="PrepareAsync"/> does not: one caller is a fire-and-forget from
+	/// <see cref="OnDisappearing"/>.
+	/// </summary>
 	async Task TeardownAsync()
 	{
-		var cts = work;
-		work = null;
-		if (cts is not null)
+		try
 		{
-			await cts.CancelAsync().ConfigureAwait(true);
-			cts.Dispose();
+			var cts = work;
+			work = null;
+			if (cts is not null)
+			{
+				await cts.CancelAsync().ConfigureAwait(true);
+				cts.Dispose();
+			}
+
+			var current = server;
+			server = null;
+			if (current is not null)
+				await current.DisposeAsync().ConfigureAwait(true);
+
+			ModelWebView.IsVisible = false;
+			StatusPanel.IsVisible = true;
 		}
-
-		var current = server;
-		server = null;
-		if (current is not null)
-			await current.DisposeAsync().ConfigureAwait(true);
-
-		ModelWebView.IsVisible = false;
-		StatusPanel.IsVisible = true;
+		catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+		{
+		}
 	}
 
 	void ShowWebView(string url)

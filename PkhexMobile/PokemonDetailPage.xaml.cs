@@ -325,7 +325,17 @@ public partial class PokemonDetailPage : ContentPage
         // DVs' low bits, SpA/SpD sharing one "Special" value). Those have no generic library
         // handle - ISeparateIVs, the obvious candidate, is implemented only by CK3/XK3
         // (Colosseum/XD), not by GBPKM - so that logic stays hand-rolled on purpose.
-        isGen12 = p.Generation is 1 or 2;
+        // Format, NOT Generation. Generation is ORIGIN-derived: PKM.Generation checks
+        // `Gen7 || GG` before `VC1`, and Gen7 tests Version is SN/MN/US/UM - so a
+        // Virtual-Console Pikachu (Version == RD) living in a Sun/Moon save falls
+        // through to VC1 and reports Generation == 1 while actually being a PK7 with
+        // MaxIV 31 and independently stored IV_HP / IV_SPD / EV_SPD.
+        //
+        // Gating on Generation therefore turned on the Gen1/2 DV derivation for VC
+        // transfers and silently overwrote real IVs with 4-bit values synthesised from
+        // the other stats on any save. Format answers the question actually being
+        // asked: does THIS FILE store the field.
+        isGen12 = p.Format is 1 or 2;
         ivMax = p.MaxIV;
         evMax = p.MaxEV;
 
