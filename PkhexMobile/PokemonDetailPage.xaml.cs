@@ -242,6 +242,11 @@ public partial class PokemonDetailPage : ContentPage
         if (isLoading)
             return;
         isDirty = true;
+
+        // Mirrored app-wide so the updater can warn before an install replaces the app.
+        // Cleared by a successful export, which is BoxListPage's Export path.
+        NavigationState.HasUnsavedChanges = true;
+
         UpdateSaveButtonState();
     }
 

@@ -1,6 +1,25 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true">
+		<!-- Hands the downloaded APK to the system package installer as a content:// URI.
+		     A file:// URI throws FileUriExposedException on API 24+, so this provider is
+		     mandatory, not optional. The authority string is duplicated in
+		     Platforms/Android/ApkInstaller.cs - keep the two in sync.
+		     exported=false + grantUriPermissions=true means nobody can read our cache
+		     except the app we explicitly hand a URI to, and only for that one URI. -->
+		<provider
+			android:name="androidx.core.content.FileProvider"
+			android:authorities="com.companyname.pkhexmobile.fileprovider"
+			android:exported="false"
+			android:grantUriPermissions="true">
+			<meta-data
+				android:name="android.support.FILE_PROVIDER_PATHS"
+				android:resource="@xml/file_paths" />
+		</provider>
+	</application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- Lets the app ask the OS to install an APK. On API 26+ this also becomes a
+	     user-visible per-app toggle ("install unknown apps") - see ApkInstaller. -->
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

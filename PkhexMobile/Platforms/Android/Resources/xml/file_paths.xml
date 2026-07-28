@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider mapping for the updater. Deliberately minimal: the only file we
+    ever hand to another app is the downloaded APK, and UpdateDownloader writes it
+    to FileSystem.CacheDirectory.
+
+    cache-path with path="." is the app's internal cache dir (Context.getCacheDir()),
+    which is exactly what MAUI's FileSystem.CacheDirectory returns on Android.
+    external-cache-path is listed only as a safety net in case a future/OEM build
+    resolves CacheDirectory to the external cache instead - without a matching entry
+    GetUriForFile throws IllegalArgumentException at install time.
+
+    Do NOT widen this to root-path or files-path: that would expose save files.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="internal_cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+</paths>

@@ -1,5 +1,4 @@
 using Android.Content;
-using Android.OS;
 using Android.Provider;
 
 namespace PkhexMobile.Update;

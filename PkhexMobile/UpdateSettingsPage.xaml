@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="PkhexMobile.UpdateSettingsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Updates"
+    BackgroundColor="{StaticResource BgApp}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+
+            <Label Text="Updates" Style="{StaticResource ScreenTitleStyle}" />
+
+            <!-- Installed version -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="INSTALLED VERSION" Style="{StaticResource LabelCaptionStyle}" />
+                    <Label x:Name="CurrentVersionLabel" Style="{StaticResource MonoValueStyle}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Automatic checking -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="AUTOMATIC CHECKS" Style="{StaticResource LabelCaptionStyle}" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label
+                            Grid.Column="0"
+                            Text="Check for updates"
+                            Style="{StaticResource BodyStyle}"
+                            VerticalOptions="Center" />
+                        <Switch
+                            x:Name="AutoCheckSwitch"
+                            Grid.Column="1"
+                            Toggled="OnAutoCheckToggled"
+                            VerticalOptions="Center" />
+                    </Grid>
+
+                    <Label
+                        Text="Checks GitHub at most once a day. Nothing is downloaded or installed without your confirmation."
+                        Style="{StaticResource BodySecondaryStyle}" />
+
+                    <Label x:Name="LastCheckedLabel" Style="{StaticResource MutedStyle}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                x:Name="CheckNowBtn"
+                Text="Check now"
+                Style="{StaticResource SecondaryButtonStyle}"
+                Clicked="OnCheckNowClicked"
+                HorizontalOptions="Fill" />
+
+            <ActivityIndicator x:Name="CheckSpinner" IsRunning="False" IsVisible="False" />
+
+            <Label x:Name="StatusLabel" Style="{StaticResource BodyStyle}" IsVisible="False" />
+
+            <!-- Available update. Hidden until a check finds one. -->
+            <Border x:Name="UpdateCard" Style="{StaticResource CardBorderStyle}" IsVisible="False">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="UPDATE AVAILABLE" Style="{StaticResource LabelCaptionStyle}" />
+                    <Label x:Name="NewVersionLabel" Style="{StaticResource RowTitleStyle}" />
+                    <Label x:Name="DownloadSizeLabel" Style="{StaticResource MutedStyle}" />
+
+                    <Label Text="WHAT CHANGED" Style="{StaticResource LabelCaptionStyle}" />
+                    <Label x:Name="ReleaseNotesLabel" Style="{StaticResource BodySecondaryStyle}" />
+
+                    <!-- Shown only when a save is loaded with unsaved edits. -->
+                    <Border x:Name="UnsavedWarning" Style="{StaticResource WarningBannerStyle}" IsVisible="False">
+                        <Label
+                            x:Name="UnsavedWarningLabel"
+                            Text="You have unsaved changes. Export them before updating - installing replaces the app, and anything not exported is lost."
+                            Style="{StaticResource BodyStyle}" />
+                    </Border>
+
+                    <ProgressBar x:Name="DownloadProgress" IsVisible="False" />
+                    <Label x:Name="DownloadStatusLabel" Style="{StaticResource MutedStyle}" IsVisible="False" />
+
+                    <Button
+                        x:Name="UpdateBtn"
+                        Text="Download update"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Clicked="OnUpdateClicked"
+                        HorizontalOptions="Fill" />
+
+                    <Button
+                        x:Name="CancelDownloadBtn"
+                        Text="Cancel download"
+                        Style="{StaticResource GhostButtonStyle}"
+                        IsVisible="False"
+                        Clicked="OnCancelDownloadClicked"
+                        HorizontalOptions="Fill" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <Button
+                            x:Name="LaterBtn"
+                            Grid.Column="0"
+                            Text="Later"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Clicked="OnLaterClicked" />
+                        <Button
+                            x:Name="SkipBtn"
+                            Grid.Column="1"
+                            Text="Skip this version"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Clicked="OnSkipClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Shown when the OS will not let us hand an APK to the installer. -->
+            <Border x:Name="PermissionCard" Style="{StaticResource CardBorderStyle}" IsVisible="False">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="PERMISSION NEEDED" Style="{StaticResource LabelCaptionStyle}" />
+                    <Label
+                        Text="Android blocks installing apps from outside the Play Store until you allow it for this app. The update is downloaded and ready; only the install step is blocked."
+                        Style="{StaticResource BodyStyle}" />
+                    <Button
+                        Text="Open permission settings"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Clicked="OnOpenPermissionSettingsClicked"
+                        HorizontalOptions="Fill" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

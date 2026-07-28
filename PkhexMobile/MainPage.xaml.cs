@@ -99,4 +99,9 @@ public partial class MainPage : ContentPage
 		// Reference-only screen - no loaded save required, unlike the buttons above.
 		await Shell.Current.GoToAsync(nameof(PokedexListPage));
 	}
+
+	private async void OnUpdatesClicked(object? sender, EventArgs e)
+	{
+		await Shell.Current.GoToAsync(nameof(UpdateSettingsPage));
+	}
 }

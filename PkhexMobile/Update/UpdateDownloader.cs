@@ -143,12 +143,14 @@ public sealed class UpdateDownloader
 		IProgress<DownloadProgress>? progress = null,
 		CancellationToken cancellationToken = default)
 	{
-		if (string.IsNullOrWhiteSpace(url) ||
-			!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ||
-			(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-		{
+		Uri? uri = null;
+		if (!string.IsNullOrWhiteSpace(url))
+			Uri.TryCreate(url, UriKind.Absolute, out uri);
+
+		// Anything but absolute http/https is refused outright - a file:// or custom
+		// scheme reaching the downloader would be a bug or a tampered release payload.
+		if (uri is null || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
 			return DownloadResult.Failure("The download link for this release is not valid.");
-		}
 
 		string destination;
 		try

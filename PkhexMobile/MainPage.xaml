@@ -64,6 +64,13 @@
                 Clicked="OnViewPokedexClicked"
                 HorizontalOptions="Fill" />
 
+            <Button
+                x:Name="UpdatesBtn"
+                Text="Updates"
+                Style="{StaticResource GhostButtonStyle}"
+                Clicked="OnUpdatesClicked"
+                HorizontalOptions="Fill" />
+
         </VerticalStackLayout>
     </ScrollView>
 

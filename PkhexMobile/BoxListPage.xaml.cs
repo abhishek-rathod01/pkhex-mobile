@@ -16,7 +16,24 @@ public partial class BoxListPage : ContentPage
     //
     // Anything new that mutates currentSave MUST set this - Export is the only path to disk, so a
     // change that forgets to flip it is a change the user can never save.
-    bool hasUnsavedChanges;
+    //
+    // Mirrored into NavigationState.HasUnsavedChanges through the property so the updater can warn
+    // before an install replaces the app. Kept as a property rather than editing every assignment
+    // site, so a future assignment cannot forget to mirror it.
+    bool hasUnsavedChangesField;
+
+    bool hasUnsavedChanges
+    {
+        get => hasUnsavedChangesField;
+        set
+        {
+            hasUnsavedChangesField = value;
+
+            // Mirrors both directions: Export writes the whole SaveFile, including edits made in
+            // PokemonDetailPage, so a successful export genuinely clears the app-wide warning.
+            NavigationState.HasUnsavedChanges = value;
+        }
+    }
 
     // Tap-to-select-then-tap-destination state. A SlotLocation, not a bound object, so it survives
     // switching boxes via BoxPicker (the destination doesn't have to be in the box that was on

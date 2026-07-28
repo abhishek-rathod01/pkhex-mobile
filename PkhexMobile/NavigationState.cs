@@ -19,4 +19,19 @@ public static class NavigationState
     // the correct party slot via SaveFile.SetPartySlotAtIndex.
     public static SaveFile? PendingPokemonSave { get; set; }
     public static int PendingPokemonIndex { get; set; }
+
+    /// <summary>
+    /// True while any editor holds edits the user has not exported yet.
+    /// </summary>
+    /// <remarks>
+    /// Dirty state is tracked per-page (BoxListPage.hasUnsavedChanges,
+    /// PokemonDetailPage.isDirty); this mirrors it somewhere global so the updater can
+    /// warn before an install replaces the app. Editors set it when they go dirty and
+    /// clear it on a successful export.
+    ///
+    /// Deliberately coarse: it is a warning trigger, not a source of truth. Leaving an
+    /// editor without exporting keeps it true, which errs toward warning too often
+    /// rather than too rarely - the failure that matters here is losing a user's edits.
+    /// </remarks>
+    public static bool HasUnsavedChanges { get; set; }
 }
