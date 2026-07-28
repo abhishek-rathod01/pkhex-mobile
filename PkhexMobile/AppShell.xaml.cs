@@ -13,5 +13,9 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(PokedexListPage), typeof(PokedexListPage));
 		Routing.RegisterRoute(nameof(PokedexDetailPage), typeof(PokedexDetailPage));
 		Routing.RegisterRoute(nameof(UpdateSettingsPage), typeof(UpdateSettingsPage));
+
+		// Registered even though Model3DFeature.IsEnabled is false: the route existing is
+		// harmless, and the entry point that would reach it is itself flag-gated.
+		Routing.RegisterRoute(nameof(Model3D.Model3DViewerPage), typeof(Model3D.Model3DViewerPage));
 	}
 }

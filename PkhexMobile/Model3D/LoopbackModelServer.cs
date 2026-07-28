@@ -82,7 +82,16 @@ public sealed class LoopbackModelServer : IDisposable, IAsyncDisposable
 		</style>
 		</head>
 		<body>
-		<model-viewer id="mv" src="__MODEL__" camera-controls auto-rotate shadow-intensity="1"></model-viewer>
+		<!--
+		tone-mapping, environment-image and exposure are the discolouration fix, not styling.
+		model-viewer defaults tone-mapping to ACES Filmic, which desaturates already-pale
+		game-rip albedo AND withholds its own 1.3x exposure compensation on the ACES path,
+		so models render flat and roughly 23% dark. "neutral" selects KhronosNeutral and
+		restores the compensation. See docs/3D-DISCOLOURATION.md for the full evidence.
+		UNVERIFIED VISUALLY - no device, no GPU, no browser in the session that wrote this.
+		-->
+		<model-viewer id="mv" src="__MODEL__" camera-controls auto-rotate
+			shadow-intensity="1" tone-mapping="neutral" environment-image="neutral" exposure="1"></model-viewer>
 		</body>
 		</html>
 		""";

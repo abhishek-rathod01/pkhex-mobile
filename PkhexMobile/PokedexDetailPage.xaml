@@ -19,6 +19,11 @@
                          real mon whose IsShiny to read), not a computed fact. -->
                     <Button x:Name="ShinyToggleBtn" Text="View Shiny" Style="{StaticResource GhostButtonStyle}"
                             Clicked="OnShinyToggleClicked" HorizontalOptions="Center" />
+                    <!-- Hidden unless Model3DFeature.IsEnabled. Rendering has never been
+                         confirmed on a device, so the button does not exist rather than
+                         existing and then apologising. See docs/3D-VIEWER-STATUS.md. -->
+                    <Button x:Name="View3DBtn" Text="View in 3D" Style="{StaticResource GhostButtonStyle}"
+                            Clicked="OnView3DClicked" HorizontalOptions="Center" IsVisible="False" />
                     <Label x:Name="DexNumberLabel" Style="{StaticResource MonoMutedStyle}" HorizontalOptions="Center" />
                     <Label x:Name="NameLabel" Style="{StaticResource HeroTitleStyle}" HorizontalOptions="Center" />
                     <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">

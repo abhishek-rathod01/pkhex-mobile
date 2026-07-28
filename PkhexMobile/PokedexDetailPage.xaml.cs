@@ -1,3 +1,5 @@
+using PkhexMobile.Model3D;
+
 namespace PkhexMobile;
 
 /// <summary>
@@ -44,6 +46,9 @@ public partial class PokedexDetailPage : ContentPage
         Title = name;
         NameLabel.Text = name;
         DexNumberLabel.Text = $"#{speciesId:D4}";
+
+        // Off by default: 3D rendering has never been confirmed to work on a device.
+        View3DBtn.IsVisible = Model3DFeature.IsEnabled;
         SpriteImage.Source = SpriteHelper.SpeciesSpriteFile(speciesId, shiny: false);
         ShinyToggleBtn.Text = "View Shiny";
 
@@ -116,6 +121,13 @@ public partial class PokedexDetailPage : ContentPage
         showingShiny = !showingShiny;
         SpriteImage.Source = SpriteHelper.SpeciesSpriteFile(speciesId, shiny: showingShiny);
         ShinyToggleBtn.Text = showingShiny ? "View Regular" : "View Shiny";
+    }
+
+    async void OnView3DClicked(object? sender, EventArgs e)
+    {
+        // A plain integer through the query dictionary is safe. Passing a SaveFile or PKM
+        // is what triggers Shell's InvalidCastException - see NavigationState.
+        await Shell.Current.GoToAsync($"{nameof(Model3DViewerPage)}?speciesId={speciesId}");
     }
 
     // "Where to Find" card: species -> games/methods/locations, sourced entirely from
