@@ -1,0 +1,218 @@
+name: Release APK
+
+# Fires only on version tags, e.g. v1.2.3 (optionally v1.2.3-beta.1).
+# Produces a signed Release APK and attaches it to a GitHub Release, which is
+# what the in-app updater (UpdateService) polls via the Releases API.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required to create the Release and upload the APK asset
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0   # full history so we can diff against the previous tag
+
+    # ---------------------------------------------------------------------
+    # Fail fast, and loudly, if signing secrets are absent. Without this the
+    # build silently produces an UNSIGNED apk that no device will install,
+    # and the failure only shows up on the user's phone.
+    # ---------------------------------------------------------------------
+    - name: Check signing secrets are present
+      env:
+        KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      run: |
+        missing=""
+        [ -z "$KEYSTORE_B64" ]      && missing="$missing ANDROID_KEYSTORE_BASE64"
+        [ -z "$KEYSTORE_PASSWORD" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+        [ -z "$KEY_ALIAS" ]         && missing="$missing ANDROID_KEY_ALIAS"
+        [ -z "$KEY_PASSWORD" ]      && missing="$missing ANDROID_KEY_PASSWORD"
+        if [ -n "$missing" ]; then
+          echo "::error::Missing required signing secret(s):$missing"
+          echo ""
+          echo "This workflow cannot produce an installable APK without them."
+          echo "See docs/RELEASE-SIGNING.md for the exact keytool and"
+          echo "'gh secret set' commands to create and upload the keystore."
+          exit 1
+        fi
+        echo "All four signing secrets are present."
+
+    # ---------------------------------------------------------------------
+    # Derive versions from the tag.
+    #   ApplicationDisplayVersion -> human-readable, e.g. 1.2.3
+    #   ApplicationVersion        -> Android versionCode, MUST be a
+    #                                monotonically increasing integer or
+    #                                Android refuses to install the update.
+    #
+    # versionCode scheme: major*10000 + minor*100 + patch
+    #   v1.0.0 -> 10000,  v1.2.3 -> 10203,  v2.0.0 -> 20000
+    # This is monotonic as long as minor and patch each stay below 100.
+    # A pre-release suffix (-beta.1) is stripped for both values; it does not
+    # get its own versionCode, so do not ship two different builds under the
+    # same major.minor.patch expecting Android to tell them apart.
+    # ---------------------------------------------------------------------
+    - name: Derive version from tag
+      id: version
+      run: |
+        RAW_TAG="${GITHUB_REF_NAME}"
+        echo "Tag: $RAW_TAG"
+
+        # Strip leading 'v' and any pre-release/build suffix.
+        VERSION="${RAW_TAG#v}"
+        CORE="${VERSION%%-*}"
+
+        if ! echo "$CORE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "::error::Tag '$RAW_TAG' does not parse as vMAJOR.MINOR.PATCH."
+          echo "Expected something like v1.2.3 or v1.2.3-beta.1."
+          exit 1
+        fi
+
+        MAJOR="${CORE%%.*}"
+        REST="${CORE#*.}"
+        MINOR="${REST%%.*}"
+        PATCH="${REST##*.}"
+
+        if [ "$MINOR" -ge 100 ] || [ "$PATCH" -ge 100 ]; then
+          echo "::error::MINOR ($MINOR) and PATCH ($PATCH) must each be < 100."
+          echo "The versionCode scheme (major*10000 + minor*100 + patch) would"
+          echo "otherwise stop being monotonically increasing."
+          exit 1
+        fi
+
+        VERSION_CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+
+        echo "display_version=$CORE"        >> "$GITHUB_OUTPUT"
+        echo "version_code=$VERSION_CODE"   >> "$GITHUB_OUTPUT"
+        echo "raw_tag=$RAW_TAG"             >> "$GITHUB_OUTPUT"
+
+        # A tag carrying a suffix is published as a GitHub pre-release.
+        if [ "$VERSION" != "$CORE" ]; then
+          echo "prerelease=true"  >> "$GITHUB_OUTPUT"
+        else
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "displayVersion=$CORE  versionCode=$VERSION_CODE"
+
+    # JDK 21 specifically. JDK 25 is documented as breaking this Android
+    # toolchain (see CLAUDE.md / .claude/rules/cloud-and-local.md).
+    - name: Setup JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
+
+    - name: Install MAUI Android workload
+      run: dotnet workload install maui-android
+
+    - name: Restore
+      run: dotnet restore PkhexMobile/PkhexMobile.csproj
+
+    # ---------------------------------------------------------------------
+    # Decode the keystore. It lands OUTSIDE the workspace so it can never be
+    # picked up by a glob, committed, or uploaded as an artifact.
+    # ---------------------------------------------------------------------
+    - name: Decode signing keystore
+      env:
+        KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      run: |
+        echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+        if [ ! -s "$RUNNER_TEMP/release.keystore" ]; then
+          echo "::error::Decoded keystore is empty. Is ANDROID_KEYSTORE_BASE64"
+          echo "valid base64? Re-run the 'base64 -w 0' step in docs/RELEASE-SIGNING.md."
+          exit 1
+        fi
+
+    - name: Publish signed APK
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      run: |
+        dotnet publish PkhexMobile/PkhexMobile.csproj \
+          -f net10.0-android \
+          -c Release \
+          -p:ApplicationDisplayVersion=${{ steps.version.outputs.display_version }} \
+          -p:ApplicationVersion=${{ steps.version.outputs.version_code }} \
+          -p:AndroidKeyStore=true \
+          -p:AndroidSigningKeyStore="$RUNNER_TEMP/release.keystore" \
+          -p:AndroidSigningStorePass="$KEYSTORE_PASSWORD" \
+          -p:AndroidSigningKeyAlias="$KEY_ALIAS" \
+          -p:AndroidSigningKeyPass="$KEY_PASSWORD"
+
+    - name: Locate the signed APK
+      id: apk
+      run: |
+        # Prefer the -Signed.apk the Android SDK emits; fall back to any apk.
+        APK=$(find PkhexMobile/bin/Release/net10.0-android -name '*-Signed.apk' | head -n 1)
+        if [ -z "$APK" ]; then
+          APK=$(find PkhexMobile/bin/Release/net10.0-android -name '*.apk' | head -n 1)
+        fi
+        if [ -z "$APK" ]; then
+          echo "::error::No APK produced by dotnet publish."
+          find PkhexMobile/bin/Release -type f -name '*.apk*' || true
+          exit 1
+        fi
+
+        # Rename so the Release asset is self-describing.
+        DEST="PkhexMobile-${{ steps.version.outputs.display_version }}.apk"
+        cp "$APK" "$DEST"
+        echo "path=$DEST" >> "$GITHUB_OUTPUT"
+        echo "Built: $DEST ($(du -h "$DEST" | cut -f1))"
+
+    - name: Remove the decoded keystore
+      if: always()
+      run: rm -f "$RUNNER_TEMP/release.keystore"
+
+    # ---------------------------------------------------------------------
+    # Release notes: every commit subject since the previous tag. This is the
+    # text the in-app update prompt shows, so keep it short and readable.
+    # ---------------------------------------------------------------------
+    - name: Build release notes
+      id: notes
+      run: |
+        PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+
+        {
+          if [ -n "$PREV_TAG" ]; then
+            echo "Changes since ${PREV_TAG}:"
+            echo ""
+            git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..${GITHUB_REF_NAME}"
+          else
+            echo "First tagged release."
+            echo ""
+            git log --no-merges --pretty=format:'- %s' -n 20 "${GITHUB_REF_NAME}"
+          fi
+          echo ""
+          echo ""
+          echo "---"
+          echo ""
+          echo "Install the attached APK directly on an Android device."
+          echo "Requires \"install from unknown sources\" for your browser or file manager."
+        } > RELEASE_NOTES.md
+
+        cat RELEASE_NOTES.md
+
+    - name: Create GitHub Release and upload APK
+      uses: softprops/action-gh-release@v2
+      with:
+        name: PkhexMobile ${{ steps.version.outputs.display_version }}
+        tag_name: ${{ steps.version.outputs.raw_tag }}
+        body_path: RELEASE_NOTES.md
+        prerelease: ${{ steps.version.outputs.prerelease }}
+        files: ${{ steps.apk.outputs.path }}

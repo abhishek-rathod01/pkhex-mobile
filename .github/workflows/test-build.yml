@@ -1,0 +1,148 @@
+name: Test Build APK
+
+# Manual, on-demand APK build for testing on a real device.
+#
+# ############################################################################
+# THIS APK IS SIGNED WITH A THROWAWAY KEY THAT IS GENERATED FRESH ON EVERY RUN.
+#
+# Consequences, which matter in practice:
+#   * Two test builds from two different runs are signed with DIFFERENT keys,
+#     so one will not upgrade over the other. Uninstall first.
+#   * A real release from release.yml will not upgrade over a test build
+#     either, for the same reason. Uninstall the test build before installing
+#     a release, or the install fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+#   * The throwaway keystore never leaves the runner and is never committed.
+#     It must never be used to sign a real release.
+# ############################################################################
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        required: false
+        default: 'Release'
+        type: choice
+        options:
+          - Release
+          - Debug
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Loud warning about the signing key
+      run: |
+        echo "::warning title=Throwaway signing key::This APK is signed with a randomly generated key created during this run. It will NOT upgrade in place over any other build - not a previous test build, and not a future release. Uninstall the existing app before installing this one."
+
+    # JDK 21 specifically. JDK 25 breaks this Android toolchain.
+    - name: Setup JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
+
+    - name: Install MAUI Android workload
+      run: dotnet workload install maui-android
+
+    - name: Restore
+      run: dotnet restore PkhexMobile/PkhexMobile.csproj
+
+    # ---------------------------------------------------------------------
+    # Generate a throwaway keystore. Password is random per run and only ever
+    # exists in this job's environment. Written to RUNNER_TEMP, outside the
+    # workspace, so no artifact upload or glob can pick it up.
+    # ---------------------------------------------------------------------
+    - name: Generate throwaway keystore
+      id: keystore
+      run: |
+        KS_PASS=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 24)
+        echo "::add-mask::$KS_PASS"
+        echo "ks_pass=$KS_PASS" >> "$GITHUB_OUTPUT"
+
+        keytool -genkeypair \
+          -keystore "$RUNNER_TEMP/throwaway.keystore" \
+          -alias throwaway \
+          -keyalg RSA -keysize 2048 -validity 3650 \
+          -storepass "$KS_PASS" -keypass "$KS_PASS" \
+          -dname "CN=PkhexMobile Test Build, OU=Testing, O=Unofficial, L=None, ST=None, C=ZZ"
+
+        echo "Throwaway keystore created (not committed, not uploaded)."
+
+    - name: Publish test APK
+      env:
+        KS_PASS: ${{ steps.keystore.outputs.ks_pass }}
+      run: |
+        dotnet publish PkhexMobile/PkhexMobile.csproj \
+          -f net10.0-android \
+          -c ${{ inputs.configuration }} \
+          -p:AndroidKeyStore=true \
+          -p:AndroidSigningKeyStore="$RUNNER_TEMP/throwaway.keystore" \
+          -p:AndroidSigningStorePass="$KS_PASS" \
+          -p:AndroidSigningKeyAlias=throwaway \
+          -p:AndroidSigningKeyPass="$KS_PASS"
+
+    - name: Locate the APK
+      id: apk
+      run: |
+        BIN="PkhexMobile/bin/${{ inputs.configuration }}/net10.0-android"
+        APK=$(find "$BIN" -name '*-Signed.apk' | head -n 1)
+        if [ -z "$APK" ]; then
+          APK=$(find "$BIN" -name '*.apk' | head -n 1)
+        fi
+        if [ -z "$APK" ]; then
+          echo "::error::No APK produced."
+          find PkhexMobile/bin -type f -name '*.apk*' || true
+          exit 1
+        fi
+
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        DEST="PkhexMobile-test-${SHORT_SHA}.apk"
+        cp "$APK" "$DEST"
+        echo "path=$DEST" >> "$GITHUB_OUTPUT"
+        echo "Built: $DEST ($(du -h "$DEST" | cut -f1))"
+
+    - name: Destroy the throwaway keystore
+      if: always()
+      run: rm -f "$RUNNER_TEMP/throwaway.keystore"
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pkhexmobile-test-apk
+        path: ${{ steps.apk.outputs.path }}
+        retention-days: 14
+        if-no-files-found: error
+
+    - name: Summary
+      run: |
+        {
+          echo "## Test APK ready"
+          echo ""
+          echo "Download it from the **Artifacts** section of this run's summary page."
+          echo ""
+          echo "### Read this before installing"
+          echo ""
+          echo "This APK is signed with a **throwaway key generated during this run**."
+          echo ""
+          echo "* It will **not** upgrade in place over any previously installed build."
+          echo "* A future signed release will **not** upgrade over it either."
+          echo "* If installing fails with \`INSTALL_FAILED_UPDATE_INCOMPATIBLE\`,"
+          echo "  uninstall the existing PkhexMobile first, then install this one."
+          echo ""
+          echo "Uninstall command:"
+          echo ""
+          echo '```'
+          echo "adb uninstall com.companyname.pkhexmobile"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
