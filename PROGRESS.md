@@ -1,3 +1,101 @@
+# PROGRESS
+
+## 2026-07-28 — In-app updater, release pipeline, 3D viewer port, three real bug fixes
+
+Detailed state, with per-item verification levels and the full
+device-verification list: **`docs/V1-RELEASE-STATE.md`**.
+
+### Environment finding that shaped the whole session
+
+A cloud session **cannot build this project**, and cannot be made to. `dotnet` is
+absent and the SDK is unobtainable: `dot.net` 301-redirects to
+`builds.dotnet.microsoft.com`, which egress policy blocks (403), as is
+`dl.google.com` for the Android SDK. There is also no `/dev/kvm` and no `vmx`/`svm`
+CPU flag, so no emulator can run either. `docs/CLOUD-NOTES.md` previously claimed the
+.NET download worked because `dotnet.microsoft.com` is allowlisted — true of the
+landing page, false of the CDN it redirects to. Corrected.
+
+Also learned: environment Setup scripts run at container **creation** and are skipped
+on resume, so editing one does nothing to a running session. The env-manager log
+shows `session_mode: resume` and `has_init_script: false`.
+
+**Workaround adopted: CI became the compiler.** `test-build.yml` builds an APK on
+every push to `claude/**`. This is the first time this repo has ever produced an
+APK — `ci.yml` only ever built `vendor/PKHeX.Core` and the nine Gen harnesses, with
+no `maui-android` workload step anywhere. `emulator-smoke.yml` then boots a real
+emulator on a GitHub runner (which does expose KVM), installs, launches, navigates
+to the Updates screen and fails on a dead process or a fatal logcat exception —
+the only automated check in the project that *runs* the app rather than compiling it.
+
+### Bugs found and fixed
+
+Found by a read-only audit, each independently verified against vendored PKHeX.Core
+source before being acted on (CLAUDE.md §8 — subagent reports are not trusted raw).
+
+1. **Silent IV/EV corruption on VC-transferred Gen1/2 Pokémon in Gen7+ saves.**
+   `isGen12` was gated on `p.Generation`, which is *origin*-derived: `PKM.Generation`
+   (`vendor/PKHeX.Core/PKM/PKM.cs:364`) tests `Gen7 || GG` **before** `VC1`, and
+   `Gen7` matches `Version is SN/MN/US/UM` — so a Virtual-Console Pikachu keeps
+   `Version == RD`, falls through to `VC1`, and reports Generation 1 while actually
+   being a `PK7` with `MaxIV 31` and independent `IV_HP`/`IV_SPD`/`EV_SPD` storage.
+   That switched on `RefreshGen12DerivedFields`, which synthesises `IV_HP` from the
+   low bits of other IVs and mirrors SPD onto SPA, into **disabled** fields the user
+   cannot correct — and those values were written back unconditionally on save.
+   Editing anything at all, even a nickname, destroyed real IVs. Now gated on
+   `p.Format`, which answers the question actually being asked: does this file store
+   the field. Same class as CLAUDE.md §3 (a disabled control that still writes).
+
+2. **Export reachable during a background Sort/Clear.** `SetBusy` disabled every
+   other entry point but not `ExportBtn`. Sort/Clear mutate the `SaveFile` under
+   `Task.Run` while Export calls `Write()` — which re-checksums and re-encrypts — on
+   the UI thread, so exporting mid-sort serialises box bytes being permuted
+   underneath it. `BoxManagement`'s rollback protects the in-memory save but cannot
+   un-write a file already handed to `FileSaver`.
+
+3. **Transitive UI-thread ANR in Showdown apply.** `ImportShowdown` reaches
+   PKHeX.Core's `ApplySetDetails`, which constructs a full `LegalityAnalysis` (plus a
+   second for relearn moves). **This invalidates WAKEUP.md's claim that the
+   synchronous-ANR audit was exhausted** — that audit grepped only for direct
+   `new LegalityAnalysis` call sites. Backgrounded onto the existing clone, which is
+   what makes it safe: the clone is unobservable elsewhere, avoiding the cross-thread
+   race on a live `PKM` that had to be fixed after `RefreshLegality` was first moved
+   off-thread.
+
+### 3D discolouration — root cause found, hypothesis refuted along the way
+
+**Cause (static analysis, not visually confirmed):** `<model-viewer>` defaults
+`tone-mapping` to ACES Filmic, which desaturates already-pale game-rip albedo *and*
+withholds model-viewer's own ×1.3 exposure compensation on the ACES path — flat and
+~23% dark. Fixed with `tone-mapping="neutral"`, `environment-image="neutral"`,
+`exposure="1"` on the generated wrapper page.
+
+**`EXT_texture_webp` is refuted, not merely unconfirmed** — worth recording so nobody
+re-opens it. model-viewer's `GLTFLoader` registers that extension by default; the
+reported flat-tan Charizard *is* its own body texture's modal colour `#EFAB62`; a
+dropped texture renders **white**, since 68 of 70 sampled materials carry no
+`baseColorFactor`; and Draco geometry decoded on-device, which proves `blob:` URLs
+and Workers were functional in that run. sRGB plumbing also checked out correct.
+
+**Separate defect:** `Resources/Raw/model3d/README.md` claims nothing loads from a
+CDN. False — Draco points at `gstatic.com`, no decoder is vendored, and all 933
+models declare `KHR_draco_mesh_compression` as required. Every model needs a live
+network fetch to render. Blocker for offline use; recorded, not fixed.
+
+The viewer ships behind a flag **defaulted off**: rendering has never been seen
+working. Ported by reading `3d-models-experimental` with `git show` — that branch is
+confirmed **not** an ancestor of HEAD, so its 214MB of blobs stay out of history.
+
+### Process note
+
+Five Opus agents ran in parallel with strict disjoint file ownership. The shared
+contracts (`Update/UpdateContracts.cs`) were written and committed **first**, by the
+orchestrator, so independently-developed pieces agreed on type shapes — with no local
+compiler, a mismatch would only have surfaced in CI. One mistake worth not repeating:
+a `git add -A` while agents were still writing captured three half-written
+`Model3D/` files into a commit. Stage explicit paths when agents are live.
+
+---
+
 # PkhexMobile — UI Status (Phase 2)
 
 Read-only party list + detail screen, built on top of the per-generation

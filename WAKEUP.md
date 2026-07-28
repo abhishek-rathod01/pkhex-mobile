@@ -1,5 +1,29 @@
 # WAKEUP — read this first
 
+> ## 2026-07-28 session: in-app updater, release pipeline, 3D port, three bug fixes
+>
+> Full state: **`docs/V1-RELEASE-STATE.md`** (what shipped, verification level of
+> each item, and the device-verification list). Cloud-session survival guide,
+> portable to other repos: **`docs/CLOUD-SESSION-GUIDANCE.md`**.
+>
+> **Correction to this file's own claims below:** the "synchronous-ANR audit is
+> genuinely done" note was WRONG. It grepped only for direct `new LegalityAnalysis`
+> call sites and missed the transitive one via `EntityTransferService.ImportShowdown`
+> -> `ApplySetDetails`. Fixed this session, but treat "audit exhausted" claims here
+> with suspicion.
+>
+> **CI now builds APKs.** `test-build.yml` produces a downloadable APK on every push
+> to `claude/**` (green). `emulator-smoke.yml` boots a real emulator on a GitHub
+> runner - the only automated check that RUNS the app. `release.yml` cuts a signed
+> release from a `v*` tag but has NEVER run, and hard-fails until the four signing
+> secrets exist (see `docs/RELEASE-SIGNING.md`).
+>
+> **A cloud session cannot build this project.** No .NET SDK, and it cannot be
+> installed: `builds.dotnet.microsoft.com` and `dl.google.com` are blocked by egress
+> policy. No KVM and no CPU virt flags either, so no emulator. Fix is Custom network
+> access plus those hosts, and then a BRAND-NEW session - setup scripts run at
+> container creation and are skipped entirely on resume.
+
 > Read this file, then `CLAUDE.md` (build commands, API traps, the recurring per-generation
 > no-op bug class, conventions). `PROGRESS.md` is the long-form technical history — every
 > decision's *why*. `CAPABILITY-GAPS.md` is the priority-ordered map of PKHeX.Core capability
