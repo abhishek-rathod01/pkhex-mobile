@@ -266,7 +266,11 @@ public partial class BoxListPage : ContentPage
         }
     }
 
-    private void UpdateExportButtonState() => ExportBtn.IsEnabled = hasUnsavedChanges;
+    // True while a background Sort/Clear is mutating currentSave. Export is unsafe then.
+    bool isBulkOperationRunning;
+
+    private void UpdateExportButtonState()
+        => ExportBtn.IsEnabled = hasUnsavedChanges && !isBulkOperationRunning;
 
     // Exports the current in-memory SaveFile state, exactly like PokemonDetailPage.OnSaveChangesClicked's
     // FileSaver flow - a move/swap has nowhere else to reach disk from, since it doesn't go through
@@ -604,6 +608,17 @@ public partial class BoxListPage : ContentPage
         ScopePicker.IsEnabled = !busy;
         BoxPicker.IsEnabled = !busy;
         ManageBtn.IsEnabled = !busy;
+
+        // Export MUST be blocked too. Sort/Clear mutate the SaveFile on a background
+        // thread (Task.Run), while Export calls currentSave.Write() on the UI thread -
+        // which re-checksums and re-encrypts. Exporting mid-sort serialises box bytes
+        // that are being permuted underneath it, producing a .sav with duplicated or
+        // lost Pokemon and a checksum that does not match its own payload.
+        // BoxManagement's rollback protects the in-memory save but cannot un-write a
+        // file already handed to FileSaver.
+        isBulkOperationRunning = busy;
+        UpdateExportButtonState();
+
         if (status.Length > 0 || !busy)
             StatusLabel.Text = status;
     }

@@ -293,7 +293,7 @@ public partial class PokemonTransferPage : ContentPage
         }
     }
 
-    private void OnApplyShowdownClicked(object? sender, EventArgs e)
+    private async void OnApplyShowdownClicked(object? sender, EventArgs e)
     {
         if (pk is null || parentSave is null)
             return;
@@ -303,7 +303,19 @@ public partial class PokemonTransferPage : ContentPage
             // Apply onto a clone first: ImportShowdown mutates in place, so a refusal partway
             // through must not be able to leave the live entity half-written.
             var candidate = (PKM)pk.Clone();
-            var result = EntityTransferService.ImportShowdown(ShowdownImportEditor.Text ?? string.Empty, candidate);
+            string setText = ShowdownImportEditor.Text ?? string.Empty;
+
+            // Off the UI thread. ImportShowdown reaches PKHeX.Core's ApplySetDetails, which
+            // runs a full `new LegalityAnalysis(pk)` (and a second one for relearn moves) -
+            // the same expensive encounter matching that already caused a measured ANR in
+            // PokemonDetailPage.RefreshLegality. An earlier audit grepped only for direct
+            // `new LegalityAnalysis` calls and missed this transitive one.
+            //
+            // The clone is safe to hand to a background thread precisely because it is a
+            // clone: nothing else can observe or mutate it while this runs, which is the
+            // race that had to be fixed after RefreshLegality was first backgrounded.
+            var result = await Task.Run(
+                () => EntityTransferService.ImportShowdown(setText, candidate)).ConfigureAwait(true);
 
             if (!result.Applied)
             {
