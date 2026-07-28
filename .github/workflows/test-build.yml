@@ -25,6 +25,17 @@ on:
         options:
           - Release
           - Debug
+  # Also build on every push to a claude/** working branch.
+  #
+  # Reason: workflow_dispatch is only offered for workflows that exist on the
+  # DEFAULT branch, so while this file lives only on a feature branch there is
+  # no way to trigger it by hand. It is also the only compiler available to a
+  # cloud session, where the .NET and Android SDK downloads are blocked by
+  # egress policy (see docs/CLOUD-NOTES.md). Drop this trigger once the
+  # workflow is on master and a local toolchain is available.
+  push:
+    branches:
+      - 'claude/**'
 
 permissions:
   contents: read
@@ -85,7 +96,7 @@ jobs:
       run: |
         dotnet publish PkhexMobile/PkhexMobile.csproj \
           -f net10.0-android \
-          -c ${{ inputs.configuration }} \
+          -c ${{ inputs.configuration || 'Release' }} \
           -p:AndroidKeyStore=true \
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/throwaway.keystore" \
           -p:AndroidSigningStorePass="$KS_PASS" \
@@ -95,7 +106,7 @@ jobs:
     - name: Locate the APK
       id: apk
       run: |
-        BIN="PkhexMobile/bin/${{ inputs.configuration }}/net10.0-android"
+        BIN="PkhexMobile/bin/${{ inputs.configuration || 'Release' }}/net10.0-android"
         APK=$(find "$BIN" -name '*-Signed.apk' | head -n 1)
         if [ -z "$APK" ]; then
           APK=$(find "$BIN" -name '*.apk' | head -n 1)
