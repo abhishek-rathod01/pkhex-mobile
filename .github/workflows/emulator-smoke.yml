@@ -1,0 +1,171 @@
+name: Emulator Smoke Test
+
+# Boots a real Android emulator on a GitHub runner, installs the app, launches it,
+# and fails if it crashes.
+#
+# WHY THIS EXISTS: a cloud dev session has no KVM, no CPU virtualisation flags and
+# no access to dl.google.com, so an emulator cannot run there. GitHub's ubuntu
+# runners DO expose KVM. This is the only automated check in the project that runs
+# the app rather than merely compiling it.
+#
+# WHAT IT PROVES: the app installs, launches, navigates, and does not throw a fatal
+# exception on the paths it touches. That is genuinely more than a build.
+#
+# WHAT IT DOES NOT PROVE - do not read a green run as device verification:
+#   * install-from-unknown-sources UX (the emulator image is permissive)
+#   * whether a signed update actually REPLACES an installed build (needs two
+#     differently-versioned, same-key APKs and a real upgrade)
+#   * 3D/GPU rendering correctness (software GL on a headless emulator is not a
+#     phone GPU)
+#   * drag-and-drop box moves - MAUI's DragGestureRecognizer does not respond to
+#     `adb input swipe`, documented across several sessions. Needs a human finger.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'claude/**'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # The emulator needs /dev/kvm to be world-writable for the runner user.
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        ls -la /dev/kvm
+
+    - name: Setup JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
+
+    - name: Install MAUI Android workload
+      run: dotnet workload install maui-android
+
+    - name: Restore
+      run: dotnet restore PkhexMobile/PkhexMobile.csproj
+
+    # Debug builds use Fast Deployment and crash on a bare `adb install`
+    # (SIGABRT, "No assemblies found"). Release is the only configuration that
+    # can be installed standalone - this cost the project ~40 minutes once.
+    - name: Build Release APK
+      run: |
+        dotnet publish PkhexMobile/PkhexMobile.csproj \
+          -f net10.0-android \
+          -c Release \
+          -p:AndroidKeyStore=false
+
+    - name: Locate APK
+      id: apk
+      run: |
+        APK=$(find PkhexMobile/bin/Release/net10.0-android -name '*-Signed.apk' | head -n 1)
+        [ -z "$APK" ] && APK=$(find PkhexMobile/bin/Release/net10.0-android -name '*.apk' | head -n 1)
+        if [ -z "$APK" ]; then
+          echo "::error::No APK produced."
+          exit 1
+        fi
+        echo "path=$APK" >> "$GITHUB_OUTPUT"
+        echo "Using $APK"
+
+    - name: Boot emulator, install, and smoke test
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        target: google_apis
+        arch: x86_64
+        profile: pixel_6
+        ram-size: 4096M
+        disable-animations: true
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        script: |
+          set -e
+          PKG=com.companyname.pkhexmobile
+
+          adb install -r "${{ steps.apk.outputs.path }}"
+
+          # Clear the log so we only judge this run.
+          adb logcat -c
+
+          adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
+          sleep 20
+
+          # 1. The process must still be alive. A launch crash kills it.
+          if ! adb shell pidof "$PKG" > /dev/null; then
+            echo "::error::App is not running 20s after launch - it crashed on startup."
+            adb logcat -d -t 400 | tail -200
+            exit 1
+          fi
+          echo "App is running after launch."
+
+          # 2. Navigate to the Updates screen. This is the path that constructs
+          #    UpdateService and the platform ApkInstaller, so a FileProvider or
+          #    Shell-route misconfiguration surfaces here rather than on a phone.
+          #    Coordinates are avoided deliberately - uiautomator gives real bounds.
+          adb shell uiautomator dump /sdcard/ui.xml || true
+          adb pull /sdcard/ui.xml ui.xml || true
+
+          if grep -q 'text="Updates"' ui.xml 2>/dev/null; then
+            BOUNDS=$(python3 - <<'PY'
+import re
+xml = open('ui.xml', encoding='utf-8', errors='ignore').read()
+m = re.search(r'text="Updates"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+if m:
+    x1, y1, x2, y2 = map(int, m.groups())
+    print((x1 + x2) // 2, (y1 + y2) // 2)
+PY
+)
+            if [ -n "$BOUNDS" ]; then
+              echo "Tapping Updates at $BOUNDS"
+              adb shell input tap $BOUNDS
+              sleep 12
+            fi
+          else
+            echo "::warning::Updates button not found in the UI dump; skipped navigation."
+          fi
+
+          # 3. Still alive after navigating?
+          if ! adb shell pidof "$PKG" > /dev/null; then
+            echo "::error::App died after navigating to the Updates screen."
+            adb logcat -d -t 400 | tail -200
+            exit 1
+          fi
+
+          # 4. No fatal exception anywhere in this run's log. This is the check that
+          #    would have caught the documented Shell GoToAsync InvalidCastException,
+          #    which every build and harness passed and only a device revealed.
+          adb logcat -d > full.log
+          if grep -qE "FATAL EXCEPTION|AndroidRuntime: Shutting down VM|IllegalArgumentException: Failed to find configured root" full.log; then
+            echo "::error::Fatal exception in logcat."
+            grep -B 5 -A 40 -E "FATAL EXCEPTION|Failed to find configured root" full.log | head -120
+            exit 1
+          fi
+
+          echo "Smoke test passed: installed, launched, navigated, no fatal exception."
+
+    - name: Upload logcat
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: emulator-logcat
+        path: |
+          full.log
+          ui.xml
+        if-no-files-found: ignore
+        retention-days: 7

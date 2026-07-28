@@ -195,6 +195,13 @@ public sealed class LoopbackModelServer : IDisposable, IAsyncDisposable
 				// number of further attempts will make the platform support it.
 				return Unavailable(root, "This device's system components do not support the local connection the 3D viewer needs.");
 			}
+			catch (TypeInitializationException)
+			{
+				// Same answer wearing a disguise: if HttpListener's own static constructor is
+				// what fails on this runtime, the PlatformNotSupportedException arrives wrapped.
+				candidate?.Close();
+				return Unavailable(root, "This device's system components do not support the local connection the 3D viewer needs.");
+			}
 			catch (HttpListenerException)
 			{
 				// Usually "address already in use": something grabbed the probed port in the
@@ -208,6 +215,17 @@ public sealed class LoopbackModelServer : IDisposable, IAsyncDisposable
 			catch (ObjectDisposedException)
 			{
 				candidate?.Close();
+			}
+			catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+			{
+				// Deliberately broad, and this is the one place in the app where that is the
+				// right call. The entire premise of this class is that nobody knows what
+				// HttpListener does on .NET for Android; an unanticipated exception type is a
+				// live possibility, and the correct response to it is a screen that says "3D
+				// view is unavailable", never a process crash on a feature the user did not
+				// ask to be load-bearing.
+				candidate?.Close();
+				return Unavailable(root, "The 3D viewer could not start on this device.");
 			}
 		}
 

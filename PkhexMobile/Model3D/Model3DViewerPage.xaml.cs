@@ -122,7 +122,7 @@ public partial class Model3DViewerPage : ContentPage
 				"3D view is unavailable",
 				started.UnavailableReason ?? "The 3D viewer could not start on this device.",
 				detail: "The 2D sprite is shown instead.",
-				warning: null,
+				warning: "3D view is an unverified feature. This message is the expected outcome on a device whose system components do not support it.",
 				canRetry: true);
 			return;
 		}
@@ -185,7 +185,6 @@ public partial class Model3DViewerPage : ContentPage
 			await current.DisposeAsync().ConfigureAwait(true);
 
 		ModelWebView.IsVisible = false;
-		ModelWebView.Source = null;
 		StatusPanel.IsVisible = true;
 	}
 
@@ -201,10 +200,13 @@ public partial class Model3DViewerPage : ContentPage
 	{
 		ModelWebView.IsVisible = false;
 		StatusPanel.IsVisible = true;
+		FooterLabel.Text = "Models are downloaded on demand and cached on this device. Nothing is bundled with the app.";
 
-		FallbackSprite.Source = speciesId == 0
-			? null
-			: SpriteHelper.SpeciesSpriteFile(speciesId, shiny: false);
+		// Left unassigned (rather than assigned null) when there is no species: a MAUI Image
+		// whose Source never resolves simply renders nothing, which is this app's standing
+		// missing-asset convention.
+		if (speciesId != 0)
+			FallbackSprite.Source = SpriteHelper.SpeciesSpriteFile(speciesId, shiny: false);
 		FallbackSprite.IsVisible = speciesId != 0;
 
 		StatusTitleLabel.Text = title;
